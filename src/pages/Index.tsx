@@ -7,6 +7,7 @@ import Timeline from '@/components/Timeline';
 import ShowcaseSection from '@/components/ShowcaseSection';
 import CallToAction from '@/components/CallToAction';
 import Footer from '@/components/Footer';
+import InfoGraphic from '@/components/InfoGraphic';
 
 const Index = () => {
   // Smooth scroll for anchor links
@@ -39,6 +40,7 @@ const Index = () => {
       <Navbar />
       <main>
         <Hero />
+        <InfoGraphic />
         <FeatureSection />
         <Timeline />
         <ShowcaseSection />
