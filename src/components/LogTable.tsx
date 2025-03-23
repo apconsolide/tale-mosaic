@@ -1,9 +1,18 @@
+
 import React from 'react';
 import { motion } from 'framer-motion';
 import { LogEntry } from '@/lib/types';
 import TransitionLayout from './TransitionLayout';
 import { Calendar, MapPin, Tag, Wrench, Clock, Check, AlertCircle, Clock2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface LogTableProps {
   logs: LogEntry[];
@@ -61,85 +70,154 @@ const LogTable: React.FC<LogTableProps> = ({ logs, onSelectLog }) => {
   return (
     <TransitionLayout animation="fade" className="w-full overflow-x-auto">
       <div className="glass rounded-xl overflow-hidden">
-        <table className="w-full min-w-[800px] divide-y divide-gray-200">
-          <thead className="bg-secondary/50">
-            <tr>
-              <TableHeader
-                label="ID"
-                sortKey="id"
-                currentSort={sortConfig}
+        <Table>
+          <TableHeader className="bg-secondary/50">
+            <TableRow>
+              <TableHead
+                className="cursor-pointer"
                 onClick={() => requestSort('id')}
-              />
-              <TableHeader
-                label="Timestamp"
-                sortKey="timestamp"
-                currentSort={sortConfig}
+              >
+                <div className="flex items-center">
+                  <span className="mr-2">ID</span>
+                  <span className={cn(
+                    "transition-opacity",
+                    sortConfig.key === 'id' ? "opacity-100" : "opacity-0 group-hover:opacity-50"
+                  )}>
+                    {sortConfig.key === 'id' ? (
+                      sortConfig.direction === 'ascending' ? '↑' : '↓'
+                    ) : (
+                      '↓'
+                    )}
+                  </span>
+                </div>
+              </TableHead>
+              <TableHead
+                className="cursor-pointer"
                 onClick={() => requestSort('timestamp')}
-              />
-              <TableHeader
-                label="Location"
-                sortKey="location"
-                currentSort={sortConfig}
+              >
+                <div className="flex items-center">
+                  <span className="mr-2">Timestamp</span>
+                  <span className={cn(
+                    "transition-opacity",
+                    sortConfig.key === 'timestamp' ? "opacity-100" : "opacity-0 group-hover:opacity-50"
+                  )}>
+                    {sortConfig.key === 'timestamp' ? (
+                      sortConfig.direction === 'ascending' ? '↑' : '↓'
+                    ) : (
+                      '↓'
+                    )}
+                  </span>
+                </div>
+              </TableHead>
+              <TableHead
+                className="cursor-pointer"
                 onClick={() => requestSort('location')}
-              />
-              <TableHeader
-                label="Activity"
-                sortKey="activityType"
-                currentSort={sortConfig}
+              >
+                <div className="flex items-center">
+                  <span className="mr-2">Location</span>
+                  <span className={cn(
+                    "transition-opacity",
+                    sortConfig.key === 'location' ? "opacity-100" : "opacity-0 group-hover:opacity-50"
+                  )}>
+                    {sortConfig.key === 'location' ? (
+                      sortConfig.direction === 'ascending' ? '↑' : '↓'
+                    ) : (
+                      '↓'
+                    )}
+                  </span>
+                </div>
+              </TableHead>
+              <TableHead
+                className="cursor-pointer"
                 onClick={() => requestSort('activityType')}
-              />
-              <TableHeader
-                label="Equipment"
-                sortKey="equipment"
-                currentSort={sortConfig}
+              >
+                <div className="flex items-center">
+                  <span className="mr-2">Activity</span>
+                  <span className={cn(
+                    "transition-opacity",
+                    sortConfig.key === 'activityType' ? "opacity-100" : "opacity-0 group-hover:opacity-50"
+                  )}>
+                    {sortConfig.key === 'activityType' ? (
+                      sortConfig.direction === 'ascending' ? '↑' : '↓'
+                    ) : (
+                      '↓'
+                    )}
+                  </span>
+                </div>
+              </TableHead>
+              <TableHead
+                className="cursor-pointer"
                 onClick={() => requestSort('equipment')}
-              />
-              <TableHeader
-                label="Status"
-                sortKey="status"
-                currentSort={sortConfig}
+              >
+                <div className="flex items-center">
+                  <span className="mr-2">Equipment</span>
+                  <span className={cn(
+                    "transition-opacity",
+                    sortConfig.key === 'equipment' ? "opacity-100" : "opacity-0 group-hover:opacity-50"
+                  )}>
+                    {sortConfig.key === 'equipment' ? (
+                      sortConfig.direction === 'ascending' ? '↑' : '↓'
+                    ) : (
+                      '↓'
+                    )}
+                  </span>
+                </div>
+              </TableHead>
+              <TableHead
+                className="cursor-pointer"
                 onClick={() => requestSort('status')}
-              />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
+              >
+                <div className="flex items-center">
+                  <span className="mr-2">Status</span>
+                  <span className={cn(
+                    "transition-opacity",
+                    sortConfig.key === 'status' ? "opacity-100" : "opacity-0 group-hover:opacity-50"
+                  )}>
+                    {sortConfig.key === 'status' ? (
+                      sortConfig.direction === 'ascending' ? '↑' : '↓'
+                    ) : (
+                      '↓'
+                    )}
+                  </span>
+                </div>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {sortedLogs.map((log, index) => (
-              <motion.tr
+              <TableRow
                 key={log.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.03 }}
                 className="hover:bg-secondary/30 cursor-pointer transition-colors"
                 onClick={() => onSelectLog(log)}
               >
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">{log.id}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <TableCell className="font-medium">{log.id}</TableCell>
+                <TableCell>
                   <div className="flex items-center">
                     <Clock className="w-4 h-4 mr-2 text-primary/70" />
                     <span>{new Date(log.timestamp).toLocaleDateString()}</span>
                   </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                </TableCell>
+                <TableCell>
                   <div className="flex items-center">
                     <MapPin className="w-4 h-4 mr-2 text-primary/70" />
                     <span>{log.location}</span>
                   </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                </TableCell>
+                <TableCell>
                   <div>
                     <span className="text-xs text-muted-foreground">
                       {log.activityCategory}
                     </span>
                     <div className="font-medium text-sm">{log.activityType}</div>
                   </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                </TableCell>
+                <TableCell>
                   <div className="flex items-center">
                     <Wrench className="w-4 h-4 mr-2 text-primary/70" />
                     <span>{log.equipment}</span>
                   </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                </TableCell>
+                <TableCell>
                   <span className={cn(
                     "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
                     {
@@ -153,53 +231,13 @@ const LogTable: React.FC<LogTableProps> = ({ logs, onSelectLog }) => {
                     <span className="mr-1">{getStatusIcon(log.status)}</span>
                     {log.status}
                   </span>
-                </td>
-              </motion.tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </TransitionLayout>
-  );
-};
-
-interface TableHeaderProps {
-  label: string;
-  sortKey: keyof LogEntry;
-  currentSort: {
-    key: keyof LogEntry;
-    direction: 'ascending' | 'descending';
-  };
-  onClick: () => void;
-}
-
-const TableHeader: React.FC<TableHeaderProps> = ({
-  label,
-  sortKey,
-  currentSort,
-  onClick,
-}) => {
-  const isSorted = currentSort.key === sortKey;
-  
-  return (
-    <th
-      className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer group"
-      onClick={onClick}
-    >
-      <div className="flex items-center">
-        <span className="mr-2">{label}</span>
-        <span className={cn(
-          "transition-opacity",
-          isSorted ? "opacity-100" : "opacity-0 group-hover:opacity-50"
-        )}>
-          {isSorted ? (
-            currentSort.direction === 'ascending' ? '↑' : '↓'
-          ) : (
-            '↓'
-          )}
-        </span>
-      </div>
-    </th>
   );
 };
 
