@@ -1,5 +1,4 @@
 
-
 import { supabase } from "@/integrations/supabase/client";
 import { LogEntry } from "@/lib/types";
 import { v4 as uuidv4 } from 'uuid';
@@ -16,7 +15,7 @@ export const fetchLogs = async (): Promise<LogEntry[]> => {
       throw error;
     }
     
-    // Transform database column names to LogEntry format
+    // Transform database column names to LogEntry format and validate status type
     return data.map(item => ({
       id: item.id,
       timestamp: item.timestamp,
@@ -27,7 +26,7 @@ export const fetchLogs = async (): Promise<LogEntry[]> => {
       personnel: item.personnel,
       material: item.material,
       measurement: item.measurement,
-      status: item.status,
+      status: validateStatus(item.status),
       notes: item.notes,
       media: item.media,
       referenceId: item.reference_id,
@@ -37,6 +36,14 @@ export const fetchLogs = async (): Promise<LogEntry[]> => {
     console.error("Error fetching logs:", error);
     return [];
   }
+};
+
+// Helper function to validate status
+const validateStatus = (status: string): LogEntry['status'] => {
+  const validStatuses: LogEntry['status'][] = ["completed", "in-progress", "planned", "delayed", "cancelled"];
+  return validStatuses.includes(status as LogEntry['status']) 
+    ? (status as LogEntry['status']) 
+    : "completed";
 };
 
 // Save multiple logs to the database
@@ -117,4 +124,3 @@ export const updateLog = async (log: LogEntry): Promise<void> => {
     throw error;
   }
 };
-

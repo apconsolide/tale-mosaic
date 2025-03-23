@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Step } from "@/components/ui/steps";
+import { Steps, Step } from "@/components/ui/steps";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Copy, ExternalLink, Database, CheckCircle, Clipboard } from 'lucide-react';
 import sqlSetup from '../lib/setup/create_activity_logs_table.sql?raw';
@@ -44,9 +44,9 @@ const DatabaseSetupGuide = () => {
             </DialogDescription>
           </DialogHeader>
           
-          <div className="mt-6 space-y-6">
+          <Steps className="mt-6">
             <Step>
-              <Step.Header className="font-medium">
+              <Step.Header>
                 Access your Supabase project
               </Step.Header>
               <Step.Description>
@@ -66,7 +66,7 @@ const DatabaseSetupGuide = () => {
             </Step>
             
             <Step>
-              <Step.Header className="font-medium">
+              <Step.Header>
                 Open the SQL Editor
               </Step.Header>
               <Step.Description>
@@ -75,7 +75,7 @@ const DatabaseSetupGuide = () => {
             </Step>
             
             <Step>
-              <Step.Header className="font-medium">
+              <Step.Header>
                 Run the SQL setup script
               </Step.Header>
               <Step.Description>
@@ -113,8 +113,8 @@ const DatabaseSetupGuide = () => {
                       <ul className="list-disc pl-5 text-sm space-y-2">
                         <li><code>GET /rest/v1/activity_logs</code> - Fetch all logs</li>
                         <li><code>POST /rest/v1/activity_logs</code> - Create new log entries</li>
-                        <li><code>PATCH /rest/v1/activity_logs?id=eq.{id}</code> - Update a log entry</li>
-                        <li><code>DELETE /rest/v1/activity_logs?id=eq.{id}</code> - Delete a log entry</li>
+                        <li><code>PATCH /rest/v1/activity_logs?id=eq.{logId}</code> - Update a log entry</li>
+                        <li><code>DELETE /rest/v1/activity_logs?id=eq.{logId}</code> - Delete a log entry</li>
                       </ul>
                     </div>
                   </TabsContent>
@@ -123,7 +123,7 @@ const DatabaseSetupGuide = () => {
             </Step>
             
             <Step>
-              <Step.Header className="font-medium">
+              <Step.Header>
                 Verify table creation
               </Step.Header>
               <Step.Description>
@@ -132,7 +132,7 @@ const DatabaseSetupGuide = () => {
             </Step>
             
             <Step>
-              <Step.Header className="font-medium">
+              <Step.Header>
                 Refresh the application
               </Step.Header>
               <Step.Description>
@@ -150,7 +150,7 @@ const DatabaseSetupGuide = () => {
                 </Button>
               </div>
             </Step>
-          </div>
+          </Steps>
         </DialogContent>
       </Dialog>
     </>

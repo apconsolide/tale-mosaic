@@ -110,4 +110,5 @@ Step.Header = StepHeader;
 Step.Description = StepDescription;
 Step.Circle = StepCircle;
 
-export { Steps, Step };
+// Only export once - fixing the duplicate export error
+export { Step };
