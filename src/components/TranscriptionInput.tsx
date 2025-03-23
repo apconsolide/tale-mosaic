@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { CardContent, Card } from "@/components/ui/card";
-import { Clock, FileText, Loader2, Sparkles } from 'lucide-react';
+import { Clock, FileText, Loader2, Sparkles, Save } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { LogEntry } from "@/lib/types";
@@ -16,6 +16,7 @@ interface TranscriptionInputProps {
 const TranscriptionInput: React.FC<TranscriptionInputProps> = ({ onLogsGenerated }) => {
   const [transcription, setTranscription] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
   const processTranscription = async () => {
@@ -55,6 +56,9 @@ const TranscriptionInput: React.FC<TranscriptionInputProps> = ({ onLogsGenerated
         referenceId: log.referenceId || `REF-${Math.floor(Math.random() * 10000)}`,
       })) as LogEntry[];
 
+      // Save logs to Supabase
+      await saveLogsToSupabase(processedLogs);
+
       onLogsGenerated(processedLogs);
       
       toast({
@@ -76,6 +80,67 @@ const TranscriptionInput: React.FC<TranscriptionInputProps> = ({ onLogsGenerated
     }
   };
 
+  const saveLogsToSupabase = async (logs: LogEntry[]) => {
+    try {
+      setIsSaving(true);
+      
+      // Check if the 'activity_logs' table exists, create it if not
+      const { error: tableCheckError } = await supabase
+        .from('activity_logs')
+        .select('id')
+        .limit(1);
+      
+      if (tableCheckError && tableCheckError.message.includes('does not exist')) {
+        // Table doesn't exist, need to create it first via an alert
+        toast({
+          title: "Database Setup Required",
+          description: "Please go to your Supabase dashboard and create an 'activity_logs' table to enable persistence.",
+          variant: "destructive",
+          duration: 10000,
+        });
+        return;
+      }
+      
+      // Insert logs into Supabase
+      const { error } = await supabase
+        .from('activity_logs')
+        .insert(logs.map(log => ({
+          id: log.id,
+          timestamp: log.timestamp,
+          location: log.location,
+          activity_category: log.activityCategory,
+          activity_type: log.activityType,
+          equipment: log.equipment,
+          personnel: log.personnel,
+          material: log.material,
+          measurement: log.measurement,
+          status: log.status,
+          notes: log.notes,
+          media: log.media,
+          reference_id: log.referenceId,
+          coordinates: log.coordinates
+        })));
+      
+      if (error) {
+        throw error;
+      }
+      
+      toast({
+        title: "Data Saved",
+        description: `Successfully saved ${logs.length} logs to the database.`,
+      });
+    } catch (error) {
+      console.error("Error saving logs to Supabase:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save logs to database. Please check your Supabase configuration.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <Card className="glass mb-6">
       <CardContent className="pt-6">
@@ -91,21 +156,21 @@ const TranscriptionInput: React.FC<TranscriptionInputProps> = ({ onLogsGenerated
           onChange={(e) => setTranscription(e.target.value)}
         />
         
-        <div className="flex justify-end">
+        <div className="flex justify-end space-x-2">
           <Button 
             onClick={processTranscription} 
-            disabled={isProcessing || !transcription.trim()}
+            disabled={isProcessing || isSaving || !transcription.trim()}
             className="relative group"
           >
             {isProcessing ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing with Gemini AI...
+                Processing...
               </>
             ) : (
               <>
                 <Sparkles className="mr-2 h-4 w-4 group-hover:text-yellow-300 transition-colors" />
-                Generate Logs with Gemini AI
+                Generate & Save Logs
               </>
             )}
             <span className="absolute -top-1 -right-1 flex h-3 w-3 group-hover:opacity-100 opacity-0 transition-opacity">

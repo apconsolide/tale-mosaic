@@ -20,9 +20,10 @@ import {
 interface LogCardProps {
   log: LogEntry;
   index: number;
+  onClick?: () => void;
 }
 
-const LogCard: React.FC<LogCardProps> = ({ log, index }) => {
+const LogCard: React.FC<LogCardProps> = ({ log, index, onClick }) => {
   // Status color mapping
   const statusColors: Record<string, string> = {
     completed: 'bg-green-100 text-green-800 border-green-200',
@@ -37,7 +38,8 @@ const LogCard: React.FC<LogCardProps> = ({ log, index }) => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: index * 0.05 }}
-      className="glass p-5 rounded-xl relative overflow-hidden group"
+      className="glass p-5 rounded-xl relative overflow-hidden group cursor-pointer hover:shadow-md transition-shadow"
+      onClick={onClick}
     >
       {/* Status indicator */}
       <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-transparent via-primary/30 to-transparent" />

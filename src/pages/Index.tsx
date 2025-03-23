@@ -5,8 +5,9 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LogEntry } from '@/lib/types';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { Calendar, Clock, MapPin, Tag, Wrench, Users, Package, BarChart as BarChartIcon, Check, Clock2, AlertCircle, X, Clipboard } from 'lucide-react';
+import { Calendar, Clock, MapPin, Tag, Wrench, Users, Package, BarChart as BarChartIcon, Check, Clock2, AlertCircle, X, Clipboard, RefreshCw, Loader2 } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
+import { Button } from "@/components/ui/button";
 
 import LogHeader from '@/components/LogHeader';
 import LogCard from '@/components/LogCard';
@@ -17,6 +18,9 @@ import LogSearch from '@/components/LogSearch';
 import TransitionLayout from '@/components/TransitionLayout';
 import TranscriptionInput from '@/components/TranscriptionInput';
 import NetworkVisualization from '@/components/NetworkVisualization';
+import DatabaseSetupGuide from '@/components/DatabaseSetupGuide';
+import { fetchLogs } from '@/services/logService';
+import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
   const [activeView, setActiveView] = useState<'dashboard' | 'map' | 'list' | 'timeline' | 'network'>('dashboard');
@@ -25,7 +29,58 @@ const Index = () => {
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [filteredLogs, setFilteredLogs] = useState<LogEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [databaseReady, setDatabaseReady] = useState<boolean | null>(null);
   const { toast } = useToast();
+  
+  // Check if database table exists
+  useEffect(() => {
+    const checkDatabase = async () => {
+      try {
+        const { error } = await supabase
+          .from('activity_logs')
+          .select('id')
+          .limit(1);
+        
+        // If there's no error, the table exists
+        setDatabaseReady(!error);
+        
+        if (!error) {
+          loadLogs();
+        }
+      } catch (err) {
+        console.error("Error checking database:", err);
+        setDatabaseReady(false);
+      }
+    };
+    
+    checkDatabase();
+  }, []);
+  
+  // Fetch logs on component mount
+  const loadLogs = async () => {
+    setIsLoading(true);
+    try {
+      const logsData = await fetchLogs();
+      setLogs(logsData);
+      
+      if (logsData.length > 0) {
+        toast({
+          title: "Data Loaded",
+          description: `Loaded ${logsData.length} logs from the database.`,
+        });
+      }
+    } catch (error) {
+      console.error("Error loading logs:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load logs from database. Check your Supabase configuration.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   useEffect(() => {
     if (selectedLocation) {
@@ -111,16 +166,24 @@ const Index = () => {
       return;
     }
     
+    // Update database status if logs were successfully generated and saved
+    setDatabaseReady(true);
+    
+    // Add new logs to the state
     setLogs(prevLogs => {
       const existingIds = new Set(prevLogs.map(log => log.id));
       const uniqueNewLogs = newLogs.filter(log => !existingIds.has(log.id));
-      return [...prevLogs, ...uniqueNewLogs];
+      return [...uniqueNewLogs, ...prevLogs]; // New logs at the top
     });
 
     toast({
       title: "Success",
-      description: `Added ${newLogs.length} log entries from Gemini AI analysis`,
+      description: `Added ${newLogs.length} log entries from transcription`,
     });
+  };
+  
+  const handleLogClick = (log: LogEntry) => {
+    setSelectedLog(log);
   };
   
   return (
@@ -132,6 +195,25 @@ const Index = () => {
       />
       
       <main className="flex-1 container mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Activity Log Knowledge Base</h1>
+          <Button 
+            onClick={loadLogs} 
+            disabled={isLoading || databaseReady === false}
+            variant="outline"
+            size="sm"
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Refresh Data
+          </Button>
+        </div>
+        
+        {databaseReady === false && <DatabaseSetupGuide />}
+        
         <TranscriptionInput onLogsGenerated={handleLogsGenerated} />
         
         <AnimatePresence mode="wait">
@@ -231,7 +313,12 @@ const Index = () => {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {filteredLogs.slice(0, 6).map((log, index) => (
-                        <LogCard key={log.id} log={log} index={index} />
+                        <LogCard 
+                          key={log.id} 
+                          log={log} 
+                          index={index} 
+                          onClick={() => handleLogClick(log)}
+                        />
                       ))}
                     </div>
                   </div>
@@ -242,6 +329,11 @@ const Index = () => {
                   <p className="text-muted-foreground mb-4">
                     Enter a transcription above to generate activity logs and visualize them.
                   </p>
+                  {databaseReady === false ? (
+                    <p className="text-sm text-muted-foreground">
+                      Set up the database using the guide above to start tracking logs over time.
+                    </p>
+                  ) : null}
                 </div>
               )}
             </motion.div>
@@ -277,7 +369,12 @@ const Index = () => {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredLogs.map((log, index) => (
-                      <LogCard key={log.id} log={log} index={index} />
+                      <LogCard 
+                        key={log.id} 
+                        log={log} 
+                        index={index}
+                        onClick={() => handleLogClick(log)}
+                      />
                     ))}
                   </div>
                 </TransitionLayout>
