@@ -9,8 +9,8 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { useTheme } from 'next-themes';
 import { Button } from './ui/button';
 import { Tooltip } from './ui/tooltip';
-import { Dropdown, DropdownMenu, DropdownItem } from './ui/dropdown';
-
+import { DropdownMenu,  DropdownMenuContent,
+  DropdownMenuTrigger, DropdownMenuItem } from './ui/dropdown-menu';
 interface LogMapProps {
   selectedLocation: string | null;
   setSelectedLocation: (location: string | null) => void;
@@ -675,46 +675,48 @@ const LogMap: React.FC<LogMapProps> = ({
               </button>
             </Tooltip>
             
-            <Dropdown>
-              <Tooltip content="Change Map Style">
-                <button className="glass-darker p-2 rounded-full shadow-sm hover:bg-black/10 transition-colors">
-                  <Layers className="w-4 h-4" />
-                </button>
-              </Tooltip>
-              
-              <DropdownMenu className="w-40">
-                <DropdownItem 
-                  onClick={() => updateMapStyle('light')}
-                  active={mapStyle === 'light'}
-                >
-                  Light
-                </DropdownItem>
-                <DropdownItem 
-                  onClick={() => updateMapStyle('dark')}
-                  active={mapStyle === 'dark'}
-                >
-                  Dark
-                </DropdownItem>
-                <DropdownItem 
-                  onClick={() => updateMapStyle('satellite')}
-                  active={mapStyle === 'satellite'}
-                >
-                  Satellite
-                </DropdownItem>
-                <DropdownItem 
-                  onClick={() => updateMapStyle('streets')}
-                  active={mapStyle === 'streets'}
-                >
-                  Streets
-                </DropdownItem>
-                <DropdownItem 
-                  onClick={() => updateMapStyle('outdoors')}
-                  active={mapStyle === 'outdoors'}
-                >
-                  Outdoors
-                </DropdownItem>
-              </DropdownMenu>
-            </Dropdown>
+            <DropdownMenu>
+  <DropdownMenuTrigger asChild>
+    <Tooltip content="Change Map Style">
+      <button className="glass-darker p-2 rounded-full shadow-sm hover:bg-black/10 transition-colors">
+        <Layers className="w-4 h-4" />
+      </button>
+    </Tooltip>
+  </DropdownMenuTrigger>
+  
+  <DropdownMenuContent className="w-40">
+    <DropdownMenuItem 
+      onClick={() => updateMapStyle('light')}
+      className={mapStyle === 'light' ? 'bg-secondary' : ''}
+    >
+      Light
+    </DropdownMenuItem>
+    <DropdownMenuItem 
+      onClick={() => updateMapStyle('dark')}
+      className={mapStyle === 'dark' ? 'bg-secondary' : ''}
+    >
+      Dark
+    </DropdownMenuItem>
+    <DropdownMenuItem 
+      onClick={() => updateMapStyle('satellite')}
+      className={mapStyle === 'satellite' ? 'bg-secondary' : ''}
+    >
+      Satellite
+    </DropdownMenuItem>
+    <DropdownMenuItem 
+      onClick={() => updateMapStyle('streets')}
+      className={mapStyle === 'streets' ? 'bg-secondary' : ''}
+    >
+      Streets
+    </DropdownMenuItem>
+    <DropdownMenuItem 
+      onClick={() => updateMapStyle('outdoors')}
+      className={mapStyle === 'outdoors' ? 'bg-secondary' : ''}
+    >
+      Outdoors
+    </DropdownMenuItem>
+  </DropdownMenuContent>
+</DropdownMenu>
             
             <Tooltip content={heatmapEnabled ? "Disable Heatmap" : "Enable Heatmap"}>
               <button 
