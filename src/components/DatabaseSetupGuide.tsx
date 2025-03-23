@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Steps, Step } from "@/components/ui/steps";
+import { Steps, Step, StepHeader, StepDescription, StepCircle } from "@/components/ui/steps";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Copy, ExternalLink, Database, CheckCircle, Clipboard } from 'lucide-react';
 import sqlSetup from '../lib/setup/create_activity_logs_table.sql?raw';
@@ -46,12 +46,12 @@ const DatabaseSetupGuide = () => {
           
           <Steps className="mt-6">
             <Step>
-              <Step.Header>
+              <StepHeader>
                 Access your Supabase project
-              </Step.Header>
-              <Step.Description>
+              </StepHeader>
+              <StepDescription>
                 Go to your Supabase dashboard and select your project.
-              </Step.Description>
+              </StepDescription>
               <div className="mt-2">
                 <Button
                   variant="outline"
@@ -66,21 +66,21 @@ const DatabaseSetupGuide = () => {
             </Step>
             
             <Step>
-              <Step.Header>
+              <StepHeader>
                 Open the SQL Editor
-              </Step.Header>
-              <Step.Description>
+              </StepHeader>
+              <StepDescription>
                 Navigate to the "SQL Editor" section in your Supabase dashboard.
-              </Step.Description>
+              </StepDescription>
             </Step>
             
             <Step>
-              <Step.Header>
+              <StepHeader>
                 Run the SQL setup script
-              </Step.Header>
-              <Step.Description>
+              </StepHeader>
+              <StepDescription>
                 Copy the SQL below and paste it into the SQL Editor, then click "Run".
-              </Step.Description>
+              </StepDescription>
               <div className="mt-4 relative">
                 <Tabs defaultValue="sql" className="w-full">
                   <TabsList>
@@ -113,8 +113,8 @@ const DatabaseSetupGuide = () => {
                       <ul className="list-disc pl-5 text-sm space-y-2">
                         <li><code>GET /rest/v1/activity_logs</code> - Fetch all logs</li>
                         <li><code>POST /rest/v1/activity_logs</code> - Create new log entries</li>
-                        <li><code>PATCH /rest/v1/activity_logs?id=eq.{logId}</code> - Update a log entry</li>
-                        <li><code>DELETE /rest/v1/activity_logs?id=eq.{logId}</code> - Delete a log entry</li>
+                        <li><code>PATCH /rest/v1/activity_logs?id=eq.{id}</code> - Update a log entry</li>
+                        <li><code>DELETE /rest/v1/activity_logs?id=eq.{id}</code> - Delete a log entry</li>
                       </ul>
                     </div>
                   </TabsContent>
@@ -123,21 +123,21 @@ const DatabaseSetupGuide = () => {
             </Step>
             
             <Step>
-              <Step.Header>
+              <StepHeader>
                 Verify table creation
-              </Step.Header>
-              <Step.Description>
+              </StepHeader>
+              <StepDescription>
                 Go to the "Table Editor" section and confirm that the "activity_logs" table is present.
-              </Step.Description>
+              </StepDescription>
             </Step>
             
             <Step>
-              <Step.Header>
+              <StepHeader>
                 Refresh the application
-              </Step.Header>
-              <Step.Description>
+              </StepHeader>
+              <StepDescription>
                 Return to the application and click "Refresh Data" to verify the connection.
-              </Step.Description>
+              </StepDescription>
               <div className="mt-2">
                 <Button
                   variant="default"

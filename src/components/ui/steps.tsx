@@ -105,10 +105,5 @@ const StepCircle = React.forwardRef<HTMLDivElement, StepCircleProps>(
 );
 StepCircle.displayName = "StepCircle";
 
-// Attach subcomponents to Step
-Step.Header = StepHeader;
-Step.Description = StepDescription;
-Step.Circle = StepCircle;
-
-// Only export once - fixing the duplicate export error
-export { Step };
+// Export the subcomponents directly
+export { Step, StepHeader, StepDescription, StepCircle };

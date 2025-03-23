@@ -30,7 +30,9 @@ export const fetchLogs = async (): Promise<LogEntry[]> => {
       notes: item.notes,
       media: item.media,
       referenceId: item.reference_id,
-      coordinates: item.coordinates
+      coordinates: item.coordinates && Array.isArray(item.coordinates) && item.coordinates.length >= 2 
+        ? [item.coordinates[0], item.coordinates[1]] as [number, number]
+        : [0, 0] as [number, number]
     }));
   } catch (error) {
     console.error("Error fetching logs:", error);
@@ -65,7 +67,7 @@ export const saveLogs = async (logs: LogEntry[]): Promise<void> => {
         notes: log.notes,
         media: log.media,
         reference_id: log.referenceId,
-        coordinates: log.coordinates
+        coordinates: log.coordinates || [0, 0]
       })));
     
     if (error) {

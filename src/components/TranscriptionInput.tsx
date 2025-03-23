@@ -3,11 +3,12 @@ import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { CardContent, Card } from "@/components/ui/card";
-import { Clock, FileText, Loader2, Sparkles, Save } from 'lucide-react';
+import { Clock, FileText, Loader2, Sparkles, Save, AlertCircle } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { LogEntry } from "@/lib/types";
 import { v4 as uuidv4 } from 'uuid';
+import GeminiApiKeySetup from "./GeminiApiKeySetup";
 
 interface TranscriptionInputProps {
   onLogsGenerated: (logs: LogEntry[]) => void;
@@ -41,7 +42,14 @@ const TranscriptionInput: React.FC<TranscriptionInputProps> = ({ onLogsGenerated
         body: { text: transcription }
       });
 
-      if (error) throw error;
+      if (error) {
+        // Check if the error is related to the Gemini API key
+        if (error.message?.includes('API key not configured') || 
+            error.message?.includes('Gemini API key')) {
+          throw new Error('Gemini API key not configured. Please set up your API key.');
+        }
+        throw error;
+      }
 
       if (!data.logs || data.logs.length === 0) {
         throw new Error('No logs were generated from the transcription');
@@ -70,17 +78,28 @@ const TranscriptionInput: React.FC<TranscriptionInputProps> = ({ onLogsGenerated
       setTranscription('');
     } catch (error) {
       console.error("Error processing transcription:", error);
-      toast({
-        title: "Error",
-        description: "Failed to process transcription. Please check if the Gemini API key is valid.",
-        variant: "destructive",
-      });
+      
+      // Check if it's a Gemini API key error
+      if (error.message?.includes('API key not configured') || 
+          error.message?.includes('Gemini API key')) {
+        toast({
+          title: "API Key Required",
+          description: "Please configure your Gemini API key to use AI-powered transcription analysis.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to process transcription. Please try again later.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const saveLogsToSupabase = async (logs: LogEntry[]) => {
+  const saveLogsToSupabase = async (logs: LogEntry[]): Promise<void> => {
     try {
       setIsSaving(true);
       
@@ -142,45 +161,49 @@ const TranscriptionInput: React.FC<TranscriptionInputProps> = ({ onLogsGenerated
   };
 
   return (
-    <Card className="glass mb-6">
-      <CardContent className="pt-6">
-        <div className="flex items-center mb-4">
-          <FileText className="w-5 h-5 mr-2 text-primary" />
-          <h2 className="text-lg font-medium">Enter Video Transcription</h2>
-        </div>
-        
-        <Textarea
-          placeholder="Paste your video transcription text here..."
-          className="min-h-[200px] mb-4"
-          value={transcription}
-          onChange={(e) => setTranscription(e.target.value)}
-        />
-        
-        <div className="flex justify-end space-x-2">
-          <Button 
-            onClick={processTranscription} 
-            disabled={isProcessing || isSaving || !transcription.trim()}
-            className="relative group"
-          >
-            {isProcessing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <Sparkles className="mr-2 h-4 w-4 group-hover:text-yellow-300 transition-colors" />
-                Generate & Save Logs
-              </>
-            )}
-            <span className="absolute -top-1 -right-1 flex h-3 w-3 group-hover:opacity-100 opacity-0 transition-opacity">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
-            </span>
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <>
+      <GeminiApiKeySetup />
+      
+      <Card className="glass mb-6">
+        <CardContent className="pt-6">
+          <div className="flex items-center mb-4">
+            <FileText className="w-5 h-5 mr-2 text-primary" />
+            <h2 className="text-lg font-medium">Enter Video Transcription</h2>
+          </div>
+          
+          <Textarea
+            placeholder="Paste your video transcription text here..."
+            className="min-h-[200px] mb-4"
+            value={transcription}
+            onChange={(e) => setTranscription(e.target.value)}
+          />
+          
+          <div className="flex justify-end space-x-2">
+            <Button 
+              onClick={processTranscription} 
+              disabled={isProcessing || isSaving || !transcription.trim()}
+              className="relative group"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="mr-2 h-4 w-4 group-hover:text-yellow-300 transition-colors" />
+                  Generate & Save Logs
+                </>
+              )}
+              <span className="absolute -top-1 -right-1 flex h-3 w-3 group-hover:opacity-100 opacity-0 transition-opacity">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+              </span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </>
   );
 };
 

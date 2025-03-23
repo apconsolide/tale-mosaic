@@ -33,7 +33,19 @@ serve(async (req) => {
   }
 
   try {
-    const { text, preferredProcessor } = await req.json()
+    const { text, preferredProcessor, checkApiKeyStatus } = await req.json()
+    
+    // Check if this is an API key status check
+    if (checkApiKeyStatus) {
+      const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')
+      return new Response(
+        JSON.stringify({ 
+          apiKeyConfigured: !!GEMINI_API_KEY,
+          message: GEMINI_API_KEY ? "Gemini API key is configured" : "Gemini API key is not configured"
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
     
     if (!text) {
       throw new Error('Transcription text is required')
@@ -98,6 +110,17 @@ async function processTranscriptionWithAI(text: string, preferredProcessor?: str
     if (preferredProcessor === 'rule-based') {
       console.log('User requested rule-based processing')
       return processTranscription(text)
+    }
+    
+    // Check for Gemini API key
+    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')
+    if (!GEMINI_API_KEY) {
+      console.log('No Gemini API key found, using rule-based processing')
+      console.error('Gemini API key not configured. Please set GEMINI_API_KEY in your Edge Function environment variables.')
+      
+      // Fall back to rule-based processing
+      const ruleBasedLogs = await processTranscription(text)
+      return ruleBasedLogs
     }
     
     // Try to enhance with AI
@@ -571,3 +594,4 @@ async function processTranscription(text: string): Promise<LogEntry[]> {
   
   return logs;
 }
+
