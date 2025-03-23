@@ -30,9 +30,7 @@ export const fetchLogs = async (): Promise<LogEntry[]> => {
       notes: item.notes,
       media: item.media,
       referenceId: item.reference_id,
-      coordinates: item.coordinates && Array.isArray(item.coordinates) && item.coordinates.length >= 2 
-        ? [item.coordinates[0], item.coordinates[1]] as [number, number]
-        : [0, 0] as [number, number]
+      coordinates: validateCoordinates(item.coordinates)
     }));
   } catch (error) {
     console.error("Error fetching logs:", error);
@@ -46,6 +44,15 @@ const validateStatus = (status: string): LogEntry['status'] => {
   return validStatuses.includes(status as LogEntry['status']) 
     ? (status as LogEntry['status']) 
     : "completed";
+};
+
+// Helper function to validate coordinates
+const validateCoordinates = (coordinates: any): [number, number] => {
+  if (Array.isArray(coordinates) && coordinates.length >= 2 && 
+      typeof coordinates[0] === 'number' && typeof coordinates[1] === 'number') {
+    return [coordinates[0], coordinates[1]];
+  }
+  return [0, 0]; // Default coordinates if invalid
 };
 
 // Save multiple logs to the database
