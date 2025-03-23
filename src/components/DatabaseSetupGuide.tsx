@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Steps, Step } from "@/components/ui/steps";
+import { Step } from "@/components/ui/steps";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Copy, ExternalLink, Database, CheckCircle, Clipboard } from 'lucide-react';
 import sqlSetup from '../lib/setup/create_activity_logs_table.sql?raw';
@@ -44,7 +44,7 @@ const DatabaseSetupGuide = () => {
             </DialogDescription>
           </DialogHeader>
           
-          <Steps className="mt-6">
+          <div className="mt-6 space-y-6">
             <Step>
               <Step.Header className="font-medium">
                 Access your Supabase project
@@ -150,7 +150,7 @@ const DatabaseSetupGuide = () => {
                 </Button>
               </div>
             </Step>
-          </Steps>
+          </div>
         </DialogContent>
       </Dialog>
     </>

@@ -1,4 +1,5 @@
 
+
 import { supabase } from "@/integrations/supabase/client";
 import { LogEntry } from "@/lib/types";
 import { v4 as uuidv4 } from 'uuid';
@@ -116,3 +117,4 @@ export const updateLog = async (log: LogEntry): Promise<void> => {
     throw error;
   }
 };
+

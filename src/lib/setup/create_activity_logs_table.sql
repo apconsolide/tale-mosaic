@@ -1,4 +1,5 @@
 
+
 -- Setup script for activity_logs table
 -- Run this in the Supabase SQL Editor to create the table
 
@@ -52,3 +53,4 @@ EXECUTE FUNCTION trigger_set_timestamp();
 
 -- Comment to explain table purpose
 COMMENT ON TABLE activity_logs IS 'Stores activity log entries for tracking work over time';
+

@@ -9,6 +9,63 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      activity_logs: {
+        Row: {
+          activity_category: string
+          activity_type: string
+          coordinates: number[] | null
+          created_at: string
+          equipment: string
+          id: string
+          location: string
+          material: string
+          measurement: string | null
+          media: string | null
+          notes: string | null
+          personnel: string
+          reference_id: string | null
+          status: string
+          timestamp: string
+          updated_at: string
+        }
+        Insert: {
+          activity_category: string
+          activity_type: string
+          coordinates?: number[] | null
+          created_at?: string
+          equipment: string
+          id?: string
+          location: string
+          material: string
+          measurement?: string | null
+          media?: string | null
+          notes?: string | null
+          personnel: string
+          reference_id?: string | null
+          status?: string
+          timestamp?: string
+          updated_at?: string
+        }
+        Update: {
+          activity_category?: string
+          activity_type?: string
+          coordinates?: number[] | null
+          created_at?: string
+          equipment?: string
+          id?: string
+          location?: string
+          material?: string
+          measurement?: string | null
+          media?: string | null
+          notes?: string | null
+          personnel?: string
+          reference_id?: string | null
+          status?: string
+          timestamp?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       assignments: {
         Row: {
           academic_year: string | null
@@ -1102,7 +1159,15 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      activity_stats: {
+        Row: {
+          activity_category: string | null
+          day: string | null
+          status: string | null
+          total_count: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
