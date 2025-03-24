@@ -1,342 +1,295 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { CardContent, Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogFooter 
-} from "@/components/ui/dialog";
-import { Clock, FileText, Loader2, Sparkles, Save, AlertCircle } from 'lucide-react';
-import { useToast } from "@/components/ui/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { LogEntry } from "@/lib/types";
-import { v4 as uuidv4 } from 'uuid';
-import GeminiApiKeySetup from "./GeminiApiKeySetup";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip } from "@/components/ui/tooltip";
+import { Bot, LucideFileAudio, Save, Loader2, Brain, Wand2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { saveLogs, saveTranscription } from '@/services/logService';
+import { LogEntry } from '@/lib/types';
+import { Input } from './ui/input';
 
 interface TranscriptionInputProps {
   onLogsGenerated: (logs: LogEntry[]) => void;
 }
 
-const TranscriptionInput: React.FC<TranscriptionInputProps> = ({ onLogsGenerated }) => {
-  const [transcription, setTranscription] = useState('');
-  const [transcriptionTitle, setTranscriptionTitle] = useState('');
+const TranscriptionInput = ({ onLogsGenerated }: TranscriptionInputProps) => {
+  const [transcriptionText, setTranscriptionText] = useState('');
+  const [title, setTitle] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const [processedLogs, setProcessedLogs] = useState<LogEntry[]>([]);
-  const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState('input');
+  const [preferredProcessor, setPreferredProcessor] = useState('gemini');
+  const [lastGeneratedLogs, setLastGeneratedLogs] = useState<LogEntry[]>([]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const processTranscription = async () => {
-    if (!transcription.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a transcription to process",
-        variant: "destructive",
-      });
+  // Sample work log text for demonstration
+  const sampleText = `At the Massey's Test Facility, the team completed the installation of hydraulic systems on Booster 9. They finished connecting all the propellant lines and tested for leaks using nitrogen.
+
+At the Sanchez Site, crews are continuing the construction of the second orbital launch mount. They've now completed about 70% of the structural steel work and are preparing to install the water deluge system next week.
+
+The transport team moved Ship 28 from the High Bay to the launch pad this morning using the SPMTs. It took approximately 3 hours to complete the roll-out operation.
+
+At the Tank Farm, technicians are upgrading the LOX storage capacity by adding two additional tanks. They report that the foundation work is complete and the first tank will be delivered tomorrow.`;
+
+  // Load the sample text
+  const loadSample = () => {
+    setTranscriptionText(sampleText);
+    setTitle('Test Facility Activities Update');
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  };
+
+  // Process the transcription through the Edge Function
+  const processTranscription = useCallback(async () => {
+    if (!transcriptionText.trim()) {
+      toast.error('Please enter some text to process');
       return;
     }
 
+    if (!title.trim()) {
+      setTitle(`Transcription - ${new Date().toLocaleDateString()}`);
+    }
+
     setIsProcessing(true);
+    setActiveTab('processing');
+
     try {
-      toast({
-        title: "Processing",
-        description: "Analyzing transcription with Gemini AI...",
-      });
-      
-      // Call the Supabase Edge Function to process transcription
-      const { data, error } = await supabase.functions.invoke('process-transcription', {
-        body: { text: transcription }
+      // Call the Edge Function to process the transcription
+      const response = await fetch('https://uimwsuqaotboepbuflio.supabase.co/functions/v1/process-transcription', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: transcriptionText,
+          preferredProcessor
+        }),
       });
 
-      if (error) {
-        // Check if the error is related to the Gemini API key
-        if (error.message?.includes('API key not configured') || 
-            error.message?.includes('Gemini API key')) {
-          throw new Error('Gemini API key not configured. Please set up your API key.');
-        }
-        throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Error processing transcription');
       }
 
-      if (!data.logs || data.logs.length === 0) {
-        throw new Error('No logs were generated from the transcription');
-      }
-
-      // Add IDs and timestamps to the logs if they don't have them
-      const processedLogs = data.logs.map((log: Partial<LogEntry>) => ({
-        ...log,
-        id: log.id || uuidv4(),
-        timestamp: log.timestamp || new Date().toISOString(),
-        status: log.status || "completed",
-        referenceId: log.referenceId || `REF-${Math.floor(Math.random() * 10000)}`,
-      })) as LogEntry[];
+      const result = await response.json();
       
-      setProcessedLogs(processedLogs);
-
-      // Save logs to Supabase
-      await saveLogsToSupabase(processedLogs);
-
-      onLogsGenerated(processedLogs);
-      
-      toast({
-        title: "Success",
-        description: `Generated ${processedLogs.length} log entries using Gemini AI`,
-      });
-      
-      // Open the save dialog automatically
-      setSaveDialogOpen(true);
-    } catch (error) {
-      console.error("Error processing transcription:", error);
-      
-      // Check if it's a Gemini API key error
-      if (error.message?.includes('API key not configured') || 
-          error.message?.includes('Gemini API key')) {
-        toast({
-          title: "API Key Required",
-          description: "Please configure your Gemini API key to use AI-powered transcription analysis.",
-          variant: "destructive",
-        });
+      if (result.logs && result.logs.length > 0) {
+        toast.success(
+          `Successfully extracted ${result.logs.length} activities${result.fromCache ? ' (from cache)' : ''}`
+        );
+        
+        // Update state with the generated logs
+        setLastGeneratedLogs(result.logs);
+        
+        // Call the parent component's handler to update the logs
+        onLogsGenerated(result.logs);
+        
+        // Switch to the "save" tab
+        setActiveTab('save');
       } else {
-        toast({
-          title: "Error",
-          description: "Failed to process transcription. Please try again later.",
-          variant: "destructive",
-        });
+        toast.error('No activities could be extracted from the text');
       }
+    } catch (error) {
+      console.error('Error processing transcription:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to process transcription');
+      setActiveTab('input');
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, [transcriptionText, preferredProcessor, title, onLogsGenerated]);
 
-  const saveLogsToSupabase = async (logs: LogEntry[]): Promise<void> => {
-    try {
-      setIsSaving(true);
-      
-      // Check if the 'activity_logs' table exists, create it if not
-      const { error: tableCheckError } = await supabase
-        .from('activity_logs')
-        .select('id')
-        .limit(1);
-      
-      if (tableCheckError && tableCheckError.message.includes('does not exist')) {
-        // Table doesn't exist, need to create it first via an alert
-        toast({
-          title: "Database Setup Required",
-          description: "Please go to your Supabase dashboard and create an 'activity_logs' table to enable persistence.",
-          variant: "destructive",
-          duration: 10000,
-        });
-        return;
-      }
-      
-      // Insert logs into Supabase
-      const { error } = await supabase
-        .from('activity_logs')
-        .insert(logs.map(log => ({
-          id: log.id,
-          timestamp: log.timestamp,
-          location: log.location,
-          activity_category: log.activityCategory,
-          activity_type: log.activityType,
-          equipment: log.equipment,
-          personnel: log.personnel,
-          material: log.material,
-          measurement: log.measurement,
-          status: log.status,
-          notes: log.notes,
-          media: log.media,
-          reference_id: log.referenceId,
-          coordinates: log.coordinates
-        })));
-      
-      if (error) {
-        throw error;
-      }
-      
-      toast({
-        title: "Data Saved",
-        description: `Successfully saved ${logs.length} logs to the database.`,
-      });
-    } catch (error) {
-      console.error("Error saving logs to Supabase:", error);
-      toast({
-        title: "Error",
-        description: "Failed to save logs to database. Please check your Supabase configuration.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSaving(false);
+  // Save the transcription and logs to the database
+  const saveToDatabase = async () => {
+    if (lastGeneratedLogs.length === 0) {
+      toast.error('No logs to save');
+      return;
     }
-  };
 
-  const saveTranscription = async () => {
+    if (!title.trim()) {
+      toast.error('Please enter a title for this transcription');
+      return;
+    }
+
+    setIsSaving(true);
     try {
-      setIsSaving(true);
+      // First save the transcription
+      const transcriptionId = await saveTranscription(
+        transcriptionText,
+        title,
+        lastGeneratedLogs.length
+      );
       
-      // Check if transcriptions table exists
-      const { error: tableCheckError } = await supabase
-        .from('transcriptions')
-        .select('id')
-        .limit(1);
+      // Then save the logs with the transcription_id
+      await saveLogs(lastGeneratedLogs, transcriptionId);
       
-      if (tableCheckError && tableCheckError.message.includes('does not exist')) {
-        toast({
-          title: "Creating Transcriptions Table",
-          description: "Setting up the transcriptions table for the first time...",
-        });
-        
-        // We don't create the table here but inform the user to run SQL
-        toast({
-          title: "Database Setup Required",
-          description: "Please run the SQL setup commands to create the transcriptions table.",
-          variant: "destructive",
-          duration: 10000,
-        });
-        return;
-      }
+      toast.success('Transcription and logs saved successfully');
       
-      // Save the transcription
-      const { error } = await supabase
-        .from('transcriptions')
-        .insert({
-          id: uuidv4(),
-          text: transcription,
-          title: transcriptionTitle || `Transcription ${new Date().toLocaleString()}`,
-          logs_generated: processedLogs.length
-        });
-      
-      if (error) {
-        throw error;
-      }
-      
-      toast({
-        title: "Transcription Saved",
-        description: "Your transcription has been saved for future reference.",
-      });
-      
-      // Clear the fields and close dialog
-      setSaveDialogOpen(false);
-      setTranscriptionTitle('');
-      setTranscription('');
-      
+      // Reset the form
+      setTranscriptionText('');
+      setTitle('');
+      setLastGeneratedLogs([]);
+      setActiveTab('input');
     } catch (error) {
-      console.error("Error saving transcription:", error);
-      toast({
-        title: "Error",
-        description: "Failed to save transcription.",
-        variant: "destructive",
-      });
+      console.error('Error saving transcription:', error);
+      toast.error('Failed to save transcription and logs');
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <>
-      <GeminiApiKeySetup />
+    <Card className="glass w-full">
+      <CardHeader>
+        <CardTitle className="text-xl">
+          Transcription Processor
+        </CardTitle>
+        <CardDescription>
+          Convert work logs into structured activity data
+        </CardDescription>
+      </CardHeader>
       
-      <Card className="glass mb-6">
-        <CardContent className="pt-6">
-          <div className="flex items-center mb-4">
-            <FileText className="w-5 h-5 mr-2 text-primary" />
-            <h2 className="text-lg font-medium">Enter Video Transcription</h2>
-          </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <CardContent>
+          <TabsList className="grid grid-cols-3 mb-4">
+            <TabsTrigger value="input">Input</TabsTrigger>
+            <TabsTrigger value="processing">Processing</TabsTrigger>
+            <TabsTrigger value="save" disabled={lastGeneratedLogs.length === 0}>Save</TabsTrigger>
+          </TabsList>
           
-          <Textarea
-            placeholder="Paste your video transcription text here..."
-            className="min-h-[200px] mb-4"
-            value={transcription}
-            onChange={(e) => setTranscription(e.target.value)}
-          />
-          
-          <div className="flex justify-end space-x-2">
-            <Button 
-              onClick={() => setSaveDialogOpen(true)} 
-              variant="outline"
-              disabled={!transcription.trim()}
-            >
-              <Save className="mr-2 h-4 w-4" />
-              Save Transcription
-            </Button>
-            
-            <Button 
-              onClick={processTranscription} 
-              disabled={isProcessing || isSaving || !transcription.trim()}
-              className="relative group"
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="mr-2 h-4 w-4 group-hover:text-yellow-300 transition-colors" />
-                  Generate Logs
-                </>
-              )}
-              <span className="absolute -top-1 -right-1 flex h-3 w-3 group-hover:opacity-100 opacity-0 transition-opacity">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
-              </span>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-      
-      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Save Transcription</DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label htmlFor="title" className="text-sm font-medium">
-                Transcription Title
-              </label>
+          <TabsContent value="input" className="space-y-4">
+            <div>
               <Input
-                id="title"
                 placeholder="Enter a title for this transcription"
-                value={transcriptionTitle}
-                onChange={(e) => setTranscriptionTitle(e.target.value)}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="mb-2"
+              />
+              <Textarea
+                ref={textareaRef}
+                placeholder="Paste or type work log transcription here..."
+                className="min-h-[300px] font-mono text-sm"
+                value={transcriptionText}
+                onChange={(e) => setTranscriptionText(e.target.value)}
               />
             </div>
             
-            {processedLogs.length > 0 && (
-              <div className="p-3 bg-secondary/20 rounded">
-                <p className="text-sm">
-                  <span className="font-medium">{processedLogs.length}</span> logs were generated from this transcription
-                </p>
+            <div className="flex items-center space-x-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={loadSample}
+              >
+                Load Sample
+              </Button>
+              
+              <div className="ml-auto flex items-center space-x-2">
+                <Tooltip content="Use Gemini AI for better extraction (requires API key)">
+                  <div className="flex items-center">
+                    <Button
+                      variant={preferredProcessor === 'gemini' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setPreferredProcessor('gemini')}
+                      className="rounded-r-none"
+                    >
+                      <Brain className="mr-1 h-4 w-4" />
+                      Gemini AI
+                    </Button>
+                  </div>
+                </Tooltip>
+                
+                <Tooltip content="Use rule-based extraction (no AI)">
+                  <Button
+                    variant={preferredProcessor === 'rule-based' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setPreferredProcessor('rule-based')}
+                    className="rounded-l-none"
+                  >
+                    <Bot className="mr-1 h-4 w-4" />
+                    Rule-based
+                  </Button>
+                </Tooltip>
               </div>
-            )}
-          </div>
+              
+              <Button 
+                onClick={processTranscription} 
+                disabled={!transcriptionText.trim() || isProcessing}
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="mr-2 h-4 w-4" />
+                    Process
+                  </>
+                )}
+              </Button>
+            </div>
+          </TabsContent>
           
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={saveTranscription} 
-              disabled={isSaving}
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Save Transcription'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+          <TabsContent value="processing" className="min-h-[300px] flex flex-col items-center justify-center">
+            <Loader2 className="h-12 w-12 animate-spin mb-4 text-primary" />
+            <h3 className="text-lg font-medium">Processing Transcription</h3>
+            <p className="text-sm text-muted-foreground mt-2">
+              Extracting activities from your work log...
+            </p>
+          </TabsContent>
+          
+          <TabsContent value="save" className="space-y-4">
+            <div className="bg-muted rounded-lg p-4">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-medium">Processing Results</h3>
+                <Badge variant="outline">{lastGeneratedLogs.length} activities found</Badge>
+              </div>
+              
+              <p className="text-sm text-muted-foreground mb-4">
+                The following activities were extracted from your transcription. You can review them on the map and in the table below.
+              </p>
+              
+              <div className="flex">
+                <Button
+                  variant="default"
+                  onClick={saveToDatabase}
+                  disabled={isSaving}
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Save Transcription & Logs
+                    </>
+                  )}
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  className="ml-auto"
+                  onClick={() => {
+                    setTranscriptionText('');
+                    setTitle('');
+                    setLastGeneratedLogs([]);
+                    setActiveTab('input');
+                  }}
+                >
+                  Start New
+                </Button>
+              </div>
+            </div>
+          </TabsContent>
+        </CardContent>
+      </Tabs>
+    </Card>
   );
 };
 

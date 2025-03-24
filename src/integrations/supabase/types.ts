@@ -26,6 +26,7 @@ export type Database = {
           reference_id: string | null
           status: string
           timestamp: string
+          transcription_id: string | null
           updated_at: string
         }
         Insert: {
@@ -44,6 +45,7 @@ export type Database = {
           reference_id?: string | null
           status?: string
           timestamp?: string
+          transcription_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -62,9 +64,25 @@ export type Database = {
           reference_id?: string | null
           status?: string
           timestamp?: string
+          transcription_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "activity_logs_transcription_id_fkey"
+            columns: ["transcription_id"]
+            isOneToOne: false
+            referencedRelation: "transcription_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_logs_transcription_id_fkey"
+            columns: ["transcription_id"]
+            isOneToOne: false
+            referencedRelation: "transcriptions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       assignments: {
         Row: {
@@ -1113,6 +1131,33 @@ export type Database = {
         }
         Relationships: []
       }
+      transcriptions: {
+        Row: {
+          created_at: string
+          id: string
+          logs_generated: number | null
+          text: string
+          title: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          logs_generated?: number | null
+          text: string
+          title: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          logs_generated?: number | null
+          text?: string
+          title?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       yearly_distributions: {
         Row: {
           academic_year: string
@@ -1165,6 +1210,16 @@ export type Database = {
           day: string | null
           status: string | null
           total_count: number | null
+        }
+        Relationships: []
+      }
+      transcription_stats: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          location_count: number | null
+          log_count: number | null
+          title: string | null
         }
         Relationships: []
       }

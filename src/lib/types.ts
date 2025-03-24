@@ -14,6 +14,16 @@ export interface LogEntry {
   media?: string;
   referenceId: string;
   coordinates?: [number, number]; // [longitude, latitude]
+  transcription_id?: string;
+}
+
+export interface Transcription {
+  id: string;
+  text: string;
+  title: string;
+  created_at: string;
+  logs_generated: number;
+  user_id?: string;
 }
 
 export type LocationGroup = {

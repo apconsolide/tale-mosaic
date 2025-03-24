@@ -1,223 +1,140 @@
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CalendarCheck, ChevronDown, ChevronUp, Clipboard, Download, Trash2, Loader2 } from 'lucide-react';
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Clock, FileText, MapPin, Trash2, RefreshCw } from "lucide-react";
 import { format } from 'date-fns';
-import { useToast } from "@/components/ui/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { Tooltip } from "@/components/ui/tooltip";
+import { deleteTranscription, fetchTranscriptions } from '@/services/logService';
+import { Transcription } from '@/lib/types';
+import { toast } from 'sonner';
 
-interface Transcription {
-  id: string;
-  text: string;
-  created_at: string;
-  title: string;
-  log_count: number;
+interface TranscriptionHistoryProps {
+  onSelectTranscription: (text: string) => void;
+  onRefreshLogs: () => void;
 }
 
-const TranscriptionHistory: React.FC = () => {
+const TranscriptionHistory = ({ onSelectTranscription, onRefreshLogs }: TranscriptionHistoryProps) => {
   const [transcriptions, setTranscriptions] = useState<Transcription[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [openItems, setOpenItems] = useState<Record<string, boolean>>({});
-  const { toast } = useToast();
-  
-  useEffect(() => {
-    fetchTranscriptions();
-  }, []);
-  
-  const fetchTranscriptions = async () => {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Load transcriptions
+  const loadTranscriptions = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('transcriptions')
-        .select('*, logs:activity_logs(count)')
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        throw error;
-      }
-      
-      // Transform the data to include log count
-      const formattedData = data.map(item => ({
-        ...item,
-        log_count: item.logs[0]?.count || 0
-      }));
-      
-      setTranscriptions(formattedData);
+      const data = await fetchTranscriptions();
+      setTranscriptions(data);
     } catch (error) {
-      console.error("Error fetching transcriptions:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load saved transcriptions",
-        variant: "destructive",
-      });
+      console.error("Error loading transcriptions:", error);
+      toast.error("Failed to load transcription history");
     } finally {
       setIsLoading(false);
     }
   };
-  
-  const deleteTranscription = async (id: string) => {
-    try {
-      const { error } = await supabase
-        .from('transcriptions')
-        .delete()
-        .eq('id', id);
-      
-      if (error) {
-        throw error;
-      }
-      
-      setTranscriptions(prev => prev.filter(t => t.id !== id));
-      
-      toast({
-        title: "Deleted",
-        description: "Transcription successfully removed",
-      });
-    } catch (error) {
-      console.error("Error deleting transcription:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete transcription",
-        variant: "destructive",
-      });
+
+  useEffect(() => {
+    loadTranscriptions();
+  }, []);
+
+  // Handle transcription selection
+  const handleSelect = async (id: string) => {
+    setSelectedId(id);
+    // Find the transcription in our local state
+    const transcription = transcriptions.find(t => t.id === id);
+    if (transcription) {
+      onSelectTranscription(transcription.text);
+      toast.success("Transcription loaded");
     }
   };
-  
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast({
-      title: "Copied",
-      description: "Transcription copied to clipboard",
-    });
+
+  // Handle transcription deletion
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card selection when clicking delete
+    
+    if (confirm("Are you sure you want to delete this transcription and its associated logs?")) {
+      setIsLoading(true);
+      try {
+        await deleteTranscription(id);
+        toast.success("Transcription and associated logs deleted");
+        loadTranscriptions();
+        onRefreshLogs(); // Refresh logs display
+      } catch (error) {
+        console.error("Error deleting transcription:", error);
+        toast.error("Failed to delete transcription");
+      } finally {
+        setIsLoading(false);
+      }
+    }
   };
-  
-  const downloadAsText = (text: string, title: string) => {
-    const element = document.createElement('a');
-    const file = new Blob([text], {type: 'text/plain'});
-    element.href = URL.createObjectURL(file);
-    element.download = `${title || 'transcription'}.txt`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-  };
-  
-  const toggleItem = (id: string) => {
-    setOpenItems(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
-  };
-  
-  if (isLoading) {
-    return (
-      <Card className="glass mt-6">
-        <CardContent className="pt-6 flex justify-center items-center h-40">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          <span className="ml-2">Loading saved transcriptions...</span>
-        </CardContent>
-      </Card>
-    );
-  }
-  
-  if (transcriptions.length === 0) {
-    return (
-      <Card className="glass mt-6">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center">
-            <CalendarCheck className="w-5 h-5 mr-2 text-primary" />
-            Transcription History
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-center py-8 text-muted-foreground">
-          <p>No saved transcriptions yet</p>
-          <p className="text-sm mt-2">Transcriptions you save will appear here for future reference</p>
-        </CardContent>
-      </Card>
-    );
-  }
-  
+
   return (
-    <Card className="glass mt-6">
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center justify-between">
-          <div className="flex items-center">
-            <CalendarCheck className="w-5 h-5 mr-2 text-primary" />
-            Transcription History
-          </div>
+    <Card className="glass w-full">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-xl flex justify-between items-center">
+          <span>Transcription History</span>
           <Button 
-            variant="outline" 
+            variant="ghost" 
             size="sm" 
-            onClick={fetchTranscriptions}
+            onClick={loadTranscriptions} 
+            disabled={isLoading}
           >
-            Refresh
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           </Button>
         </CardTitle>
+        <CardDescription>
+          Previously processed transcriptions
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {transcriptions.map((transcription) => (
-          <Collapsible
-            key={transcription.id}
-            open={openItems[transcription.id]}
-            onOpenChange={() => toggleItem(transcription.id)}
-            className="border rounded-md"
-          >
-            <CollapsibleTrigger asChild>
-              <div className="p-4 flex items-center justify-between cursor-pointer hover:bg-secondary/10">
-                <div>
-                  <div className="font-medium flex items-center">
-                    {transcription.title || `Transcription from ${format(new Date(transcription.created_at), 'PPP')}`}
-                    <Badge variant="outline" className="ml-2">
-                      {transcription.log_count} logs
-                    </Badge>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {format(new Date(transcription.created_at), 'PPp')}
-                  </div>
-                </div>
-                {openItems[transcription.id] ? (
-                  <ChevronUp className="h-5 w-5 text-muted-foreground" />
-                ) : (
-                  <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                )}
-              </div>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="p-4 pt-0 border-t">
-                <div className="max-h-60 overflow-y-auto mb-4 p-3 bg-secondary/20 rounded text-sm">
-                  {transcription.text}
-                </div>
-                <div className="flex justify-end space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => copyToClipboard(transcription.text)}
-                  >
-                    <Clipboard className="h-4 w-4 mr-1" />
-                    Copy
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => downloadAsText(transcription.text, transcription.title)}
-                  >
-                    <Download className="h-4 w-4 mr-1" />
-                    Download
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => deleteTranscription(transcription.id)}
-                  >
-                    <Trash2 className="h-4 w-4 mr-1" />
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-        ))}
+      <CardContent>
+        <ScrollArea className="h-[400px] pr-4">
+          {transcriptions.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <FileText className="h-8 w-8 mx-auto opacity-50 mb-2" />
+              <p>No saved transcriptions yet</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {transcriptions.map((transcription) => (
+                <Card 
+                  key={transcription.id}
+                  className={`cursor-pointer transition hover:shadow-md ${selectedId === transcription.id ? 'ring-2 ring-primary' : ''}`}
+                  onClick={() => handleSelect(transcription.id)}
+                >
+                  <CardHeader className="py-3 px-4">
+                    <CardTitle className="text-base flex justify-between items-center">
+                      <span className="truncate">{transcription.title}</span>
+                      <Tooltip content="Delete transcription and associated logs">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={(e) => handleDelete(transcription.id, e)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </Tooltip>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardFooter className="py-2 px-4 flex justify-between text-xs text-muted-foreground">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center">
+                        <Clock className="h-3 w-3 mr-1" />
+                        <span>{format(new Date(transcription.created_at), 'MMM d, yyyy')}</span>
+                      </div>
+                      {transcription.logs_generated > 0 && (
+                        <Badge variant="secondary" className="text-xs">
+                          {transcription.logs_generated} logs
+                        </Badge>
+                      )}
+                    </div>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
       </CardContent>
     </Card>
   );

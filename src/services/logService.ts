@@ -1,6 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { LogEntry } from "@/lib/types";
+import { LogEntry, Transcription } from "@/lib/types";
 import { v4 as uuidv4 } from 'uuid';
 
 // Fetch all logs from the database
@@ -30,7 +30,8 @@ export const fetchLogs = async (): Promise<LogEntry[]> => {
       notes: item.notes,
       media: item.media,
       referenceId: item.reference_id,
-      coordinates: validateCoordinates(item.coordinates)
+      coordinates: validateCoordinates(item.coordinates),
+      transcription_id: item.transcription_id
     }));
   } catch (error) {
     console.error("Error fetching logs:", error);
@@ -56,7 +57,7 @@ const validateCoordinates = (coordinates: any): [number, number] | undefined => 
 };
 
 // Save multiple logs to the database
-export const saveLogs = async (logs: LogEntry[]): Promise<void> => {
+export const saveLogs = async (logs: LogEntry[], transcription_id?: string): Promise<void> => {
   try {
     const { error } = await supabase
       .from('activity_logs')
@@ -74,7 +75,8 @@ export const saveLogs = async (logs: LogEntry[]): Promise<void> => {
         notes: log.notes,
         media: log.media,
         reference_id: log.referenceId,
-        coordinates: log.coordinates
+        coordinates: log.coordinates,
+        transcription_id: transcription_id
       })));
     
     if (error) {
@@ -121,7 +123,8 @@ export const updateLog = async (log: LogEntry): Promise<void> => {
         notes: log.notes,
         media: log.media,
         reference_id: log.referenceId,
-        coordinates: log.coordinates
+        coordinates: log.coordinates,
+        transcription_id: log.transcription_id
       })
       .eq('id', log.id);
     
@@ -182,5 +185,89 @@ export const fetchLogStats = async () => {
       locationCounts: {},
       totalLogs: 0
     };
+  }
+};
+
+// Transcription related functions
+export const saveTranscription = async (text: string, title: string, logsCount: number): Promise<string> => {
+  try {
+    const id = uuidv4();
+    const { error } = await supabase
+      .from('transcriptions')
+      .insert({
+        id,
+        text,
+        title,
+        logs_generated: logsCount
+      });
+    
+    if (error) {
+      throw error;
+    }
+    
+    return id;
+  } catch (error) {
+    console.error("Error saving transcription:", error);
+    throw error;
+  }
+};
+
+export const fetchTranscriptions = async (): Promise<Transcription[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('transcription_stats')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error("Error fetching transcriptions:", error);
+    return [];
+  }
+};
+
+export const getTranscriptionById = async (id: string): Promise<Transcription | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('transcriptions')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) {
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error("Error fetching transcription:", error);
+    return null;
+  }
+};
+
+export const deleteTranscription = async (id: string): Promise<void> => {
+  try {
+    // First delete all associated logs
+    await supabase
+      .from('activity_logs')
+      .delete()
+      .eq('transcription_id', id);
+      
+    // Then delete the transcription
+    const { error } = await supabase
+      .from('transcriptions')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      throw error;
+    }
+  } catch (error) {
+    console.error("Error deleting transcription:", error);
+    throw error;
   }
 };

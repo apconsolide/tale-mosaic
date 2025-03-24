@@ -1,957 +1,511 @@
 
-import React, { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { LogEntry } from '@/lib/types';
-import { Maximize, Minimize, MapPin, Layers, List, Filter, Info, X, Compass, ChevronDown } from 'lucide-react';
-import TransitionLayout from './TransitionLayout';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import mapboxgl from 'mapbox-gl';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip } from "@/components/ui/tooltip";
+import { LocateFixed, ChevronsUp, ChevronsDown, Layers, Plus, Minus } from 'lucide-react';
+import { LogEntry, LocationGroup } from '@/lib/types';
+import { toast } from 'sonner';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { useTheme } from 'next-themes';
-import { Button } from './ui/button';
-import { Tooltip } from './ui/tooltip';
-import { DropdownMenu,  DropdownMenuContent,
-  DropdownMenuTrigger, DropdownMenuItem } from './ui/dropdown-menu';
+
+// Set your Mapbox token - ideally this would be in an environment variable
+mapboxgl.accessToken = 'pk.eyJ1IjoiamVmZnJleXRoZWRldmVsb3BlciIsImEiOiJjbGc2ODVsMGswaXkwM2VwaWhyMGZnODhhIn0.YHO7Kj5y-IHgMQ4CnptiFw';
+
+// Define types for props
 interface LogMapProps {
-  selectedLocation: string | null;
-  setSelectedLocation: (location: string | null) => void;
   logs: LogEntry[];
-  onLogSelect?: (logId: string) => void;
-  isLoading?: boolean;
+  onSelectLog?: (log: LogEntry) => void;
+  selectedLogId?: string;
 }
 
-type MapStyle = 'light' | 'dark' | 'satellite' | 'streets' | 'outdoors';
-type FilterOption = 'all' | 'recent' | 'highActivity' | 'lowActivity';
+// Default position if no logs available
+const DEFAULT_POSITION = [-97.1722, 25.9969]; // SpaceX Starbase area
+const DEFAULT_ZOOM = 13;
 
-const LogMap: React.FC<LogMapProps> = ({ 
-  selectedLocation, 
-  setSelectedLocation, 
-  logs,
-  onLogSelect,
-  isLoading = false
-}) => {
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<mapboxgl.Map | null>(null);
-  const markersRef = useRef<mapboxgl.Marker[]>([]);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [mapStyle, setMapStyle] = useState<MapStyle>('light');
-  const [showSidebar, setShowSidebar] = useState(true);
-  const [activeFilter, setActiveFilter] = useState<FilterOption>('all');
-  const [showLocationDetails, setShowLocationDetails] = useState(false);
-  const [selectedLocationDetails, setSelectedLocationDetails] = useState<any>(null);
-  const [search, setSearch] = useState('');
-  const [heatmapEnabled, setHeatmapEnabled] = useState(false);
-  const { theme } = useTheme();
+const LogMap = ({ logs, onSelectLog, selectedLogId }: LogMapProps) => {
+  // State variables
+  const [map, setMap] = useState<mapboxgl.Map | null>(null);
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
+  const [error, setError] = useState<string | null>(null);
+  const [expandLegend, setExpandLegend] = useState(false);
+  const [activeLocationGroups, setActiveLocationGroups] = useState<LocationGroup[]>([]);
+  const [basemapStyle, setBasemapStyle] = useState<'satellite' | 'streets' | 'terrain'>('satellite');
   
-  // Get location data from real logs
-  const getLocationGroups = () => {
-    const locationMap = new Map<string, { 
-      count: number, 
-      coordinates?: [number, number],
-      logIds: string[],
-      lastActivity?: Date,
-      firstActivity?: Date
-    }>();
-    
-    // Mock coordinates for locations if not provided in logs
-    const defaultCoordinates: Record<string, [number, number]> = {
-      "Massey's Test Facility": [-97.7431, 30.2672],
-      "Sanchez Site": [-97.8331, 30.1872],
-      "Delta Junction": [-97.6531, 30.3472],
-      "North Ridge": [-97.7231, 30.4272],
-      "West Portal": [-97.9131, 30.2472],
-      "South Basin": [-97.7631, 30.1272],
-      "East Quarry": [-97.6131, 30.2772],
-      "Central Processing": [-97.7731, 30.2972],
-      // Add more locations with mock coordinates
-      "Highland Operations": [-97.6931, 30.3172],
-      "Lower Containment": [-97.7831, 30.1772],
-      "Research Zone Alpha": [-97.8431, 30.3072]
-    };
+  // Refs
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const markersRef = useRef<mapboxgl.Marker[]>([]);
+  
+  // Process logs and group by location
+  const locationGroups: LocationGroup[] = useMemo(() => {
+    const groups: Record<string, LocationGroup> = {};
     
     logs.forEach(log => {
-      if (log.location) {
-        const locationData = locationMap.get(log.location) || { 
-          count: 0, 
-          logIds: [],
-          lastActivity: undefined,
-          firstActivity: undefined
-        };
-        
-        locationData.count += 1;
-        if (log.id) locationData.logIds.push(log.id);
-        
-        // Track activity timestamps
-        const timestamp = log.timestamp ? new Date(log.timestamp) : new Date();
-        if (!locationData.lastActivity || timestamp > locationData.lastActivity) {
-          locationData.lastActivity = timestamp;
-        }
-        if (!locationData.firstActivity || timestamp < locationData.firstActivity) {
-          locationData.firstActivity = timestamp;
-        }
-        
-        // Use coordinates from log or default coordinates
-        if (log.coordinates) {
-          locationData.coordinates = log.coordinates;
-        } else if (defaultCoordinates[log.location]) {
-          locationData.coordinates = defaultCoordinates[log.location];
-        }
-        
-        locationMap.set(log.location, locationData);
-      }
-    });
-    
-    return Array.from(locationMap.entries()).map(([location, data]) => ({
-      location,
-      count: data.count,
-      coordinates: data.coordinates,
-      logIds: data.logIds,
-      lastActivity: data.lastActivity,
-      firstActivity: data.firstActivity,
-      daysSinceLastActivity: data.lastActivity ? 
-        Math.floor((new Date().getTime() - data.lastActivity.getTime()) / (1000 * 3600 * 24)) : 
-        undefined
-    }));
-  };
-
-  const allLocations = getLocationGroups();
-  
-  // Filter locations based on activeFilter
-  const getFilteredLocations = () => {
-    let filtered = [...allLocations];
-    
-    // Apply search filter
-    if (search) {
-      filtered = filtered.filter(loc => 
-        loc.location.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-    
-    // Apply category filter
-    switch(activeFilter) {
-      case 'recent':
-        filtered = filtered.filter(loc => loc.daysSinceLastActivity !== undefined && loc.daysSinceLastActivity < 7)
-          .sort((a, b) => {
-            if (!a.lastActivity || !b.lastActivity) return 0;
-            return b.lastActivity.getTime() - a.lastActivity.getTime();
-          });
-        break;
-      case 'highActivity':
-        filtered = filtered.sort((a, b) => b.count - a.count).slice(0, 5);
-        break;
-      case 'lowActivity':
-        filtered = filtered.sort((a, b) => a.count - b.count).slice(0, 5);
-        break;
-      default:
-        // 'all' - no additional filtering
-        break;
-    }
-    
-    return filtered;
-  };
-  
-  const locations = getFilteredLocations();
-  
-  // Get map style URL based on selected style and theme
-  const getMapStyleUrl = () => {
-    const isDarkMode = theme === 'dark';
-    
-    switch(mapStyle) {
-      case 'dark':
-        return 'mapbox://styles/mapbox/dark-v11';
-      case 'satellite':
-        return 'mapbox://styles/mapbox/satellite-streets-v12';
-      case 'streets':
-        return 'mapbox://styles/mapbox/streets-v12';
-      case 'outdoors':
-        return 'mapbox://styles/mapbox/outdoors-v12';
-      case 'light':
-      default:
-        return isDarkMode ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/light-v11';
-    }
-  };
-  
-  // Initialize map and add markers
-  const initializeMap = () => {
-    if (!mapContainerRef.current || mapRef.current) return;
-    
-    // Replace with your Mapbox token - for demo purposes only
-    // In production, use env variables or backend authentication
-    mapboxgl.accessToken = 'pk.eyJ1IjoiemFjazk0MDAiLCJhIjoiY204aXJrcmtrMGZ2aDJqczU5Z2x3YXozdyJ9.tmcZ6BycoNg901oOihrWAQ';
-    
-    mapRef.current = new mapboxgl.Map({
-      container: mapContainerRef.current,
-      style: getMapStyleUrl(),
-      center: [-97.7431, 30.2672], // Default center
-      zoom: 10,
-      attributionControl: false
-    });
-    
-    // Add navigation controls
-    mapRef.current.addControl(
-      new mapboxgl.NavigationControl({
-        visualizePitch: true,
-      }),
-      'top-right'
-    );
-    
-    // Add scale control
-    mapRef.current.addControl(
-      new mapboxgl.ScaleControl({
-        maxWidth: 100,
-        unit: 'imperial'
-      }),
-      'bottom-right'
-    );
-    
-    // Add geolocate control
-    mapRef.current.addControl(
-      new mapboxgl.GeolocateControl({
-        positionOptions: {
-          enableHighAccuracy: true
-        },
-        trackUserLocation: true
-      }),
-      'top-right'
-    );
-    
-    // Add location markers when map is loaded
-    mapRef.current.on('load', () => {
-      addMarkersToMap();
+      const location = log.location;
       
-      // Add heatmap layer if enabled
-      if (heatmapEnabled) {
-        addHeatmapLayer();
+      if (!groups[location]) {
+        groups[location] = {
+          location,
+          logs: [],
+          coordinates: log.coordinates
+        };
+      }
+      
+      groups[location].logs.push(log);
+      
+      // Use the latest coordinates for the location (in case they differ)
+      if (log.coordinates) {
+        groups[location].coordinates = log.coordinates;
       }
     });
-  };
-  
-  // Add markers to the map
-  const addMarkersToMap = () => {
-    if (!mapRef.current) return;
     
-    // Remove existing markers
+    return Object.values(groups);
+  }, [logs]);
+  
+  // Effect to initialize map
+  useEffect(() => {
+    if (!mapContainer.current) return;
+    
+    try {
+      // Create the map
+      const mapInstance = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: 'mapbox://styles/mapbox/satellite-streets-v12',
+        center: DEFAULT_POSITION,
+        zoom: DEFAULT_ZOOM,
+        attributionControl: false,
+      });
+      
+      // Add navigation control
+      mapInstance.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
+      
+      // Add attribution control separately with custom position
+      mapInstance.addControl(new mapboxgl.AttributionControl(), 'bottom-left');
+      
+      // Update state with map instance
+      mapInstance.on('load', () => {
+        setMap(mapInstance);
+        
+        // Update zoom state when map is zoomed
+        mapInstance.on('zoom', () => {
+          setZoom(mapInstance.getZoom());
+        });
+      });
+      
+      // Clean up
+      return () => {
+        mapInstance.remove();
+        setMap(null);
+      };
+    } catch (err) {
+      console.error('Error initializing map:', err);
+      setError('Failed to initialize map. Please check your internet connection.');
+    }
+  }, []);
+  
+  // Update markers when logs or map changes
+  useEffect(() => {
+    if (!map) return;
+    
+    // Clear existing markers
     markersRef.current.forEach(marker => marker.remove());
     markersRef.current = [];
     
-    // Add new markers
-    locations.forEach(location => {
-      if (location.coordinates) {
-        const el = document.createElement('div');
-        el.className = 'location-marker';
-        
-        const isSelected = selectedLocation === location.location;
-        
-        el.innerHTML = `
-          <div class="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg border-2 ${isSelected ? 'border-primary' : 'border-gray-200'} transition-all hover:scale-110">
-            <div class="w-6 h-6 ${isSelected ? 'bg-primary' : 'bg-primary/80'} rounded-full flex items-center justify-center text-white text-[10px] font-bold transition-colors">
-              ${location.count}
-            </div>
-          </div>
-        `;
-        
-        // Create a popup with more detailed information
-        const popup = new mapboxgl.Popup({ 
-          offset: 25,
-          closeButton: false,
-          maxWidth: '300px'
-        }).setHTML(`
-          <div class="p-1">
-            <h3 class="text-sm font-medium">${location.location}</h3>
-            <p class="text-xs">${location.count} logs</p>
-            ${location.lastActivity ? 
-              `<p class="text-xs mt-1">Last activity: ${location.lastActivity.toLocaleDateString()}</p>` : ''}
-            <button class="text-xs text-primary mt-2 view-details-btn">View details</button>
-          </div>
-        `);
-        
-        // Create marker
-        const marker = new mapboxgl.Marker({
-          element: el,
-          anchor: 'bottom',
-          // Add slight random offset to prevent overlapping markers at same location
-          offset: [Math.random() * 5 - 2.5, Math.random() * 5 - 2.5]
-        })
-          .setLngLat(location.coordinates)
-          .setPopup(popup)
-          .addTo(mapRef.current!);
-        
-        markersRef.current.push(marker);
-        
-        // Add click events
-        el.addEventListener('click', () => {
-          setSelectedLocation(location.location);
+    // Group logs by location
+    setActiveLocationGroups(locationGroups);
+    
+    // Create clusters for grouped logs
+    const bounds = new mapboxgl.LngLatBounds();
+    let hasValidCoordinates = false;
+    
+    locationGroups.forEach(group => {
+      if (!group.coordinates) return;
+      
+      hasValidCoordinates = true;
+      bounds.extend(group.coordinates as [number, number]);
+      
+      // Create the marker element
+      const markerEl = document.createElement('div');
+      markerEl.className = 'marker-cluster';
+      
+      // Add count to marker
+      const count = group.logs.length;
+      markerEl.innerHTML = `
+        <div class="marker-count ${selectedLogId && group.logs.some(log => log.id === selectedLogId) ? 'selected' : ''}">
+          ${count}
+        </div>
+      `;
+      
+      // Style based on count
+      let size = 30;
+      if (count > 5) size = 40;
+      if (count > 10) size = 50;
+      
+      markerEl.style.width = `${size}px`;
+      markerEl.style.height = `${size}px`;
+      
+      // Create marker and add to map
+      const marker = new mapboxgl.Marker(markerEl)
+        .setLngLat(group.coordinates as [number, number])
+        .addTo(map);
+      
+      // Add click event
+      markerEl.addEventListener('click', () => {
+        // If multiple logs at location, show popup with list
+        if (count > 1) {
+          const coordinates = group.coordinates as [number, number];
           
-          // Fly to location
-          mapRef.current?.flyTo({
-            center: location.coordinates,
-            zoom: 14,
-            duration: 1000
+          // Create popup content
+          const popupContent = document.createElement('div');
+          popupContent.className = 'location-popup';
+          
+          const locationTitle = document.createElement('h3');
+          locationTitle.textContent = group.location;
+          locationTitle.className = 'font-medium mb-2';
+          popupContent.appendChild(locationTitle);
+          
+          const logList = document.createElement('div');
+          logList.className = 'log-list';
+          
+          group.logs.forEach(log => {
+            const logItem = document.createElement('div');
+            logItem.className = `log-item cursor-pointer p-1 hover:bg-gray-100 rounded ${log.id === selectedLogId ? 'bg-blue-50 border-l-2 border-blue-500 pl-2' : ''}`;
+            
+            logItem.innerHTML = `
+              <div class="text-xs font-medium">${log.activityType}</div>
+              <div class="text-xs text-gray-500">${log.activityCategory} • ${new Date(log.timestamp).toLocaleDateString()}</div>
+            `;
+            
+            logItem.addEventListener('click', () => {
+              if (onSelectLog) onSelectLog(log);
+              // Close any open popups
+              document.querySelectorAll('.mapboxgl-popup').forEach(el => el.remove());
+            });
+            
+            logList.appendChild(logItem);
           });
+          
+          popupContent.appendChild(logList);
+          
+          // Create and show popup
+          new mapboxgl.Popup({ closeButton: true, maxWidth: '300px' })
+            .setLngLat(coordinates)
+            .setDOMContent(popupContent)
+            .addTo(map);
+        } else if (count === 1 && onSelectLog) {
+          // If only one log, select it directly
+          onSelectLog(group.logs[0]);
+        }
+      });
+      
+      // Highlight marker if it contains the selected log
+      if (selectedLogId && group.logs.some(log => log.id === selectedLogId)) {
+        markerEl.classList.add('selected-marker');
+        
+        // If a single log is selected and it's in this group, center the map on it
+        if (group.logs.length === 1 && group.logs[0].id === selectedLogId) {
+          map.flyTo({
+            center: group.coordinates as [number, number],
+            zoom: Math.max(zoom, 14),
+            essential: true
+          });
+        }
+      }
+      
+      // Store marker reference for cleanup
+      markersRef.current.push(marker);
+    });
+    
+    // If we have coordinates, fit bounds
+    if (hasValidCoordinates && locationGroups.length > 0) {
+      // Don't fit bounds if a single log is selected (we're already centering on it)
+      if (!(selectedLogId && locationGroups.some(g => g.logs.length === 1 && g.logs[0].id === selectedLogId))) {
+        map.fitBounds(bounds, {
+          padding: 50,
+          maxZoom: 16
+        });
+      }
+    }
+    
+    // Create GeoJSON for heat visualization
+    if (locationGroups.length > 0 && hasValidCoordinates) {
+      try {
+        // Remove existing sources/layers
+        if (map.getSource('activity-points')) {
+          map.removeLayer('activity-heat');
+          map.removeSource('activity-points');
+        }
+        
+        // Create point data for heat map
+        const points: Array<{
+          type: "Feature";
+          properties: { count: number };
+          geometry: {
+            type: "Point";
+            coordinates: [number, number];
+          };
+        }> = [];
+        
+        locationGroups.forEach(group => {
+          if (group.coordinates) {
+            points.push({
+              type: "Feature",
+              properties: {
+                count: group.logs.length,
+              },
+              geometry: {
+                type: "Point",
+                coordinates: group.coordinates,
+              },
+            });
+          }
         });
         
-        // Add event listener for the "View details" button in popup
-        marker.getPopup().on('open', () => {
-          setTimeout(() => {
-            const detailsBtn = document.querySelector('.view-details-btn');
-            if (detailsBtn) {
-              detailsBtn.addEventListener('click', () => {
-                setSelectedLocationDetails(location);
-                setShowLocationDetails(true);
-                marker.getPopup().remove();
-              });
-            }
-          }, 10);
+        // Add the source and layer
+        map.addSource('activity-points', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: points,
+          },
         });
-      }
-    });
-    
-    // If selected location, fly to it
-    if (selectedLocation) {
-      const location = locations.find(l => l.location === selectedLocation);
-      if (location?.coordinates) {
-        mapRef.current?.flyTo({
-          center: location.coordinates,
-          zoom: 14,
-          duration: 1000
+        
+        map.addLayer({
+          id: 'activity-heat',
+          type: 'heatmap',
+          source: 'activity-points',
+          paint: {
+            'heatmap-weight': [
+              'interpolate',
+              ['linear'],
+              ['get', 'count'],
+              1, 0.5,
+              10, 1
+            ],
+            'heatmap-intensity': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              9, 1,
+              15, 3
+            ],
+            'heatmap-color': [
+              'interpolate',
+              ['linear'],
+              ['heatmap-density'],
+              0, 'rgba(0, 0, 255, 0)',
+              0.2, 'rgba(0, 0, 255, 0.2)',
+              0.4, 'rgba(0, 255, 255, 0.4)',
+              0.6, 'rgba(0, 255, 0, 0.6)',
+              0.8, 'rgba(255, 255, 0, 0.8)',
+              1, 'rgba(255, 0, 0, 1)'
+            ],
+            'heatmap-radius': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              10, 15,
+              15, 25
+            ],
+            'heatmap-opacity': 0.7
+          }
         });
+      } catch (e) {
+        console.error('Error setting up heat map:', e);
       }
     }
-  };
+  }, [map, logs, selectedLogId, locationGroups, onSelectLog, zoom]);
   
-  // Add heatmap layer to visualize log density
-  const addHeatmapLayer = () => {
-    if (!mapRef.current) return;
+  // Update map style when basemap changes
+  useEffect(() => {
+    if (!map) return;
     
-    // Remove existing heatmap if it exists
-    if (mapRef.current.getSource('log-density')) {
-      mapRef.current.removeLayer('log-density-heat');
-      mapRef.current.removeSource('log-density');
+    let style = 'mapbox://styles/mapbox/satellite-streets-v12';
+    
+    if (basemapStyle === 'streets') {
+      style = 'mapbox://styles/mapbox/streets-v12';
+    } else if (basemapStyle === 'terrain') {
+      style = 'mapbox://styles/mapbox/outdoors-v12';
     }
     
-    // Create heatmap data points from locations
-    const points = locations.flatMap(location => {
-      if (!location.coordinates) return [];
-      
-      // Create multiple points based on log count for better heatmap visualization
-      return Array(Math.min(location.count, 20)).fill(0).map(() => ({
-        type: 'Feature',
-        properties: {
-          count: location.count
+    map.setStyle(style);
+  }, [map, basemapStyle]);
+  
+  // Navigate to user's location
+  const handleLocateMe = () => {
+    if (!map) return;
+    
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        position => {
+          const { latitude, longitude } = position.coords;
+          map.flyTo({
+            center: [longitude, latitude],
+            zoom: 14,
+            essential: true
+          });
         },
-        geometry: {
-          type: 'Point',
-          coordinates: location.coordinates
+        error => {
+          console.error('Error getting location:', error);
+          toast.error('Could not get your location. Please check your device settings.');
         }
-      }));
-    });
-    
-    mapRef.current.addSource('log-density', {
-      type: 'geojson',
-      data: {
-        type: 'FeatureCollection',
-        features: points
-      }
-    });
-    
-    mapRef.current.addLayer(
-      {
-        id: 'log-density-heat',
-        type: 'heatmap',
-        source: 'log-density',
-        paint: {
-          // Increase weight based on count
-          'heatmap-weight': ['interpolate', ['linear'], ['get', 'count'], 0, 0, 10, 1],
-          'heatmap-intensity': 0.6,
-          'heatmap-color': [
-            'interpolate',
-            ['linear'],
-            ['heatmap-density'],
-            0, 'rgba(33,102,172,0)',
-            0.2, 'rgb(103,169,207)',
-            0.4, 'rgb(209,229,240)',
-            0.6, 'rgb(253,219,199)',
-            0.8, 'rgb(239,138,98)',
-            1, 'rgb(178,24,43)'
-          ],
-          'heatmap-radius': 15,
-          'heatmap-opacity': 0.7
-        }
-      },
-      'waterway-label'
-    );
-  };
-  
-  // Update map style
-  const updateMapStyle = (style: MapStyle) => {
-    setMapStyle(style);
-    if (mapRef.current) {
-      mapRef.current.setStyle(getMapStyleUrl());
-      
-      // Need to re-add markers and layers after style change
-      mapRef.current.once('styledata', () => {
-        addMarkersToMap();
-        if (heatmapEnabled) {
-          addHeatmapLayer();
-        }
-      });
+      );
+    } else {
+      toast.error('Geolocation is not supported by your browser.');
     }
   };
   
-  // Toggle heatmap
-  const toggleHeatmap = () => {
-    const newState = !heatmapEnabled;
-    setHeatmapEnabled(newState);
-    
-    if (newState && mapRef.current) {
-      addHeatmapLayer();
-    } else if (!newState && mapRef.current) {
-      if (mapRef.current.getLayer('log-density-heat')) {
-        mapRef.current.removeLayer('log-density-heat');
-      }
-      if (mapRef.current.getSource('log-density')) {
-        mapRef.current.removeSource('log-density');
-      }
+  // Function to cycle through basemap styles
+  const cycleBasemapStyle = () => {
+    if (basemapStyle === 'satellite') {
+      setBasemapStyle('streets');
+    } else if (basemapStyle === 'streets') {
+      setBasemapStyle('terrain');
+    } else {
+      setBasemapStyle('satellite');
     }
   };
   
-  // Initialize map effect
-  useEffect(() => {
-    initializeMap();
-    
-    // Cleanup
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-    };
-  }, []);
-  
-  // Update markers when locations or selected location changes
-  useEffect(() => {
-    if (mapRef.current && mapRef.current.isStyleLoaded()) {
-      addMarkersToMap();
-      
-      // Also update heatmap if enabled
-      if (heatmapEnabled) {
-        addHeatmapLayer();
-      }
-    }
-  }, [locations, selectedLocation, heatmapEnabled]);
-  
-  // Update map style when theme changes
-  useEffect(() => {
-    if (mapRef.current && mapStyle === 'light') {
-      mapRef.current.setStyle(getMapStyleUrl());
-      
-      // Need to re-add markers and layers after style change
-      mapRef.current.once('styledata', () => {
-        addMarkersToMap();
-        if (heatmapEnabled) {
-          addHeatmapLayer();
-        }
-      });
-    }
-  }, [theme]);
-  
-  const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen);
-    // Allow the map to resize
-    setTimeout(() => {
-      mapRef.current?.resize();
-    }, 300);
-  };
-  
-  // Show a loading state
-  if (isLoading) {
-    return (
-      <TransitionLayout animation="fade" className="w-full">
-        <div className="glass rounded-xl p-8 text-center">
-          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-          <h2 className="text-xl font-medium">Loading Map Data</h2>
-          <p className="text-muted-foreground mt-2">
-            Preparing location information...
-          </p>
-        </div>
-      </TransitionLayout>
-    );
-  }
-  
-  // Show a placeholder if no locations available
-  if (locations.length === 0) {
-    return (
-      <TransitionLayout animation="fade" className="w-full">
-        <div className="glass rounded-xl p-8 text-center">
-          <h2 className="text-xl font-medium mb-4">No Location Data Available</h2>
-          <p className="text-muted-foreground">
-            Enter a transcription above to generate activity logs with location data.
-          </p>
-          {search && (
-            <p className="mt-4 text-sm">
-              No results found for "<span className="font-medium">{search}</span>".
-              <button 
-                onClick={() => setSearch('')} 
-                className="ml-2 text-primary hover:underline"
-              >
-                Clear search
-              </button>
-            </p>
-          )}
-        </div>
-      </TransitionLayout>
-    );
-  }
-  
+  // Render the component
   return (
-    <TransitionLayout animation="fade" className="w-full">
-      <div className="relative">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3 }}
-          className={`relative ${isFullscreen ? 'fixed inset-0 z-50 bg-background' : 'h-[500px] rounded-xl overflow-hidden border border-border'}`}
-        >
-          <div ref={mapContainerRef} className="w-full h-full" />
-          
-          {/* Location sidebar panel */}
-          <AnimatePresence>
-            {showSidebar && (
-              <motion.div 
-                initial={{ x: -280 }}
-                animate={{ x: 0 }}
-                exit={{ x: -280 }}
-                transition={{ duration: 0.3 }}
-                className={`absolute top-0 left-0 h-full glass border-r border-border
-                  ${isFullscreen ? 'w-[280px]' : 'w-[250px]'}`}
+    <div className="relative h-full w-full">
+      {error ? (
+        <div className="flex items-center justify-center h-full w-full bg-gray-100 dark:bg-gray-800">
+          <Card>
+            <CardContent className="py-8 text-center">
+              <p className="text-red-500 dark:text-red-400">{error}</p>
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => window.location.reload()}
               >
-                <div className="p-4 border-b border-border">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-medium">Locations</h3>
-                    <div className="flex space-x-1">
-                      <Tooltip content={`${activeFilter === 'all' ? 'Filtered' : 'All'} Locations`}>
-                        <Button 
-                          size="xs" 
-                          variant="ghost" 
-                          onClick={() => setActiveFilter(activeFilter === 'all' ? 'all' : 'all')}
-                          className="h-6 w-6 p-1"
-                        >
-                          <Filter className="w-3.5 h-3.5" />
-                        </Button>
-                      </Tooltip>
-                      {!isFullscreen && (
-                        <Tooltip content="Hide Sidebar">
-                          <Button 
-                            size="xs" 
-                            variant="ghost" 
-                            onClick={() => setShowSidebar(false)}
-                            className="h-6 w-6 p-1"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </Button>
-                        </Tooltip>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Search locations..."
-                      className="w-full px-3 py-1.5 rounded-md text-sm bg-background/50 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    {search && (
-                      <button 
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        onClick={() => setSearch('')}
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className="flex items-center mt-3 space-x-1">
-                    <Button
-                      size="xs"
-                      variant={activeFilter === 'all' ? 'default' : 'outline'}
-                      onClick={() => setActiveFilter('all')}
-                      className="text-xs flex-1 h-7"
-                    >
-                      All
-                    </Button>
-                    <Button
-                      size="xs"
-                      variant={activeFilter === 'recent' ? 'default' : 'outline'}
-                      onClick={() => setActiveFilter('recent')}
-                      className="text-xs flex-1 h-7"
-                    >
-                      Recent
-                    </Button>
-                    <Button
-                      size="xs"
-                      variant={activeFilter === 'highActivity' ? 'default' : 'outline'}
-                      onClick={() => setActiveFilter('highActivity')}
-                      className="text-xs flex-1 h-7"
-                    >
-                      Highest
-                    </Button>
-                  </div>
-                </div>
-                
-                <div className="overflow-y-auto h-[calc(100%-120px)] px-2 py-2">
-                  <div className="space-y-1">
-                    {locations.map((location, index) => (
-                      <button
-                        key={index}
-                        onClick={() => {
-                          setSelectedLocation(location.location);
-                          if (location.coordinates) {
-                            mapRef.current?.flyTo({
-                              center: location.coordinates,
-                              zoom: 14,
-                              duration: 1000
-                            });
-                          }
-                        }}
-                        className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center
-                          ${selectedLocation === location.location 
-                            ? 'bg-primary text-primary-foreground' 
-                            : 'hover:bg-secondary/80'}`}
-                      >
-                        <MapPin className="w-3.5 h-3.5 mr-2 flex-shrink-0" />
-                        <div className="flex-1 truncate">
-                          <div className="font-medium truncate">{location.location}</div>
-                          {location.lastActivity && (
-                            <div className="text-xs opacity-70">
-                              {location.daysSinceLastActivity === 0 ? 'Today' : 
-                               location.daysSinceLastActivity === 1 ? 'Yesterday' : 
-                               `${location.daysSinceLastActivity} days ago`}
-                            </div>
-                          )}
-                        </div>
-                        <span className={`ml-auto text-xs rounded-full w-6 h-6 flex items-center justify-center
-                          ${selectedLocation === location.location 
-                            ? 'bg-white/20' 
-                            : 'bg-secondary-foreground/10'}`}>
-                          {location.count}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                
-                <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-border bg-background/50 backdrop-blur-sm">
-                  <div className="text-xs text-muted-foreground">
-                    Showing {locations.length} of {allLocations.length} locations
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <>
+          <div ref={mapContainer} className="h-full w-full rounded-lg" />
           
-          {/* Sidebar toggle button (when sidebar is hidden) */}
-          {!showSidebar && (
-            <button
-              onClick={() => setShowSidebar(true)}
-              className="absolute top-4 left-4 glass-darker p-2 rounded-full shadow-sm hover:bg-black/10 transition-colors"
-            >
-              <List className="w-4 h-4" />
-            </button>
-          )}
-          
-          {/* Map controls */}
+          {/* Map Controls */}
           <div className="absolute top-4 right-4 flex flex-col space-y-2">
-            <Tooltip content={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}>
-              <button
-                onClick={toggleFullscreen}
-                className="glass-darker p-2 rounded-full shadow-sm hover:bg-black/10 transition-colors"
+            <Tooltip content="Find my location">
+              <Button 
+                variant="outline"
+                size="sm"
+                className="bg-white dark:bg-gray-800 shadow-md hover:bg-gray-100 w-8 h-8 p-0"
+                onClick={handleLocateMe}
               >
-                {isFullscreen ? (
-                  <Minimize className="w-4 h-4" />
-                ) : (
-                  <Maximize className="w-4 h-4" />
-                )}
-              </button>
+                <LocateFixed className="h-4 w-4" />
+              </Button>
             </Tooltip>
             
-            <DropdownMenu>
-  <DropdownMenuTrigger asChild>
-    <Tooltip content="Change Map Style">
-      <button className="glass-darker p-2 rounded-full shadow-sm hover:bg-black/10 transition-colors">
-        <Layers className="w-4 h-4" />
-      </button>
-    </Tooltip>
-  </DropdownMenuTrigger>
-  
-  <DropdownMenuContent className="w-40">
-    <DropdownMenuItem 
-      onClick={() => updateMapStyle('light')}
-      className={mapStyle === 'light' ? 'bg-secondary' : ''}
-    >
-      Light
-    </DropdownMenuItem>
-    <DropdownMenuItem 
-      onClick={() => updateMapStyle('dark')}
-      className={mapStyle === 'dark' ? 'bg-secondary' : ''}
-    >
-      Dark
-    </DropdownMenuItem>
-    <DropdownMenuItem 
-      onClick={() => updateMapStyle('satellite')}
-      className={mapStyle === 'satellite' ? 'bg-secondary' : ''}
-    >
-      Satellite
-    </DropdownMenuItem>
-    <DropdownMenuItem 
-      onClick={() => updateMapStyle('streets')}
-      className={mapStyle === 'streets' ? 'bg-secondary' : ''}
-    >
-      Streets
-    </DropdownMenuItem>
-    <DropdownMenuItem 
-      onClick={() => updateMapStyle('outdoors')}
-      className={mapStyle === 'outdoors' ? 'bg-secondary' : ''}
-    >
-      Outdoors
-    </DropdownMenuItem>
-  </DropdownMenuContent>
-</DropdownMenu>
-            
-            <Tooltip content={heatmapEnabled ? "Disable Heatmap" : "Enable Heatmap"}>
-              <button 
-                onClick={toggleHeatmap}
-                className={`p-2 rounded-full shadow-sm transition-colors ${
-                  heatmapEnabled 
-                    ? 'bg-primary text-white' 
-                    : 'glass-darker hover:bg-black/10'
-                }`}
+            <Tooltip content={`Change basemap (Current: ${basemapStyle})`}>
+              <Button 
+                variant="outline"
+                size="sm"
+                className="bg-white dark:bg-gray-800 shadow-md hover:bg-gray-100 w-8 h-8 p-0"
+                onClick={cycleBasemapStyle}
               >
-                <Compass className="w-4 h-4" />
-              </button>
+                <Layers className="h-4 w-4" />
+              </Button>
+            </Tooltip>
+            
+            <Tooltip content="Zoom in">
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-white dark:bg-gray-800 shadow-md hover:bg-gray-100 w-8 h-8 p-0"
+                onClick={() => map?.zoomIn()}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </Tooltip>
+            
+            <Tooltip content="Zoom out">
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-white dark:bg-gray-800 shadow-md hover:bg-gray-100 w-8 h-8 p-0"
+                onClick={() => map?.zoomOut()}
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
             </Tooltip>
           </div>
           
-          {/* Selected location info panel */}
-          {selectedLocation && (
-            <motion.div
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 0.3 }}
-              className="absolute bottom-6 left-1/2 transform -translate-x-1/2 glass rounded-lg px-4 py-3 shadow-lg max-w-md"
-            >
-              <div className="flex items-center">
-                <MapPin className="w-4 h-4 mr-2 text-primary" />
-                <h3 className="font-medium">{selectedLocation}</h3>
-                <button 
-                  onClick={() => setSelectedLocation(null)} 
-                  className="ml-auto text-muted-foreground hover:text-foreground"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              
-              {selectedLocationDetails && (
-                <div className="mt-2 flex items-center justify-between text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Logs: </span>
-                    <span className="font-medium">{selectedLocationDetails.count}</span>
-                  </div>
-                  {selectedLocationDetails.lastActivity && (
-                    <div>
-                      <span className="text-muted-foreground">Last activity: </span>
-                      <span className="font-medium">
-                        {selectedLocationDetails.lastActivity.toLocaleDateString()}
-                      </span>
-                    </div>
+          {/* Legend */}
+          <div className="absolute bottom-16 left-4 bg-white dark:bg-gray-800 shadow-md rounded-md overflow-hidden">
+            <div className="p-3 cursor-pointer flex justify-between items-center" onClick={() => setExpandLegend(!expandLegend)}>
+              <h3 className="text-sm font-medium">Activity Legend</h3>
+              {expandLegend ? <ChevronsDown className="h-4 w-4" /> : <ChevronsUp className="h-4 w-4" />}
+            </div>
+            
+            {expandLegend && (
+              <div className="p-3 pt-0 space-y-2 text-xs">
+                <div className="border-t dark:border-gray-700 pt-2">
+                  {activeLocationGroups.length === 0 ? (
+                    <p className="text-gray-500 py-1">No activities to display</p>
+                  ) : (
+                    activeLocationGroups.map((group, index) => (
+                      <div key={index} className="flex items-center py-1">
+                        <div 
+                          className="w-3 h-3 rounded-full mr-2" 
+                          style={{ backgroundColor: '#3b82f6' }} 
+                        />
+                        <span className="truncate max-w-[200px]">{group.location}</span>
+                        <Badge variant="secondary" className="ml-2">
+                          {group.logs.length}
+                        </Badge>
+                      </div>
+                    ))
                   )}
-                  <button 
-                    onClick={() => {
-                      setSelectedLocationDetails(
-                        locations.find(l => l.location === selectedLocation)
-                      );
-                      setShowLocationDetails(true);
-                    }}
-                    className="text-primary hover:underline text-sm"
-                  >
-                    View details
-                  </button>
                 </div>
-              )}
-            </motion.div>
-          )}
+              </div>
+            )}
+          </div>
           
-          {/* Location detail modal */}
-          <AnimatePresence>
-            {showLocationDetails && selectedLocationDetails && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-black/40 flex items-center justify-center z-10"
-                onClick={() => setShowLocationDetails(false)}
-              >
-                <motion.div
-                  initial={{ scale: 0.9, y: 20 }}
-                  animate={{ scale: 1, y: 0 }}
-                  exit={{ scale: 0.9, y: 20 }}
-                  className="bg-background rounded-xl shadow-xl max-w-lg w-full m-4 overflow-hidden"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="p-5 border-b border-border flex items-center justify-between">
-                    <h3 className="text-lg font-medium">{selectedLocationDetails.location}</h3>
-                    <button 
-                      onClick={() => setShowLocationDetails(false)} 
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      
-<X className="w-5 h-5" />
-                   </button>
-                 </div>
-                 
-                 <div className="p-5">
-                   <div className="grid grid-cols-2 gap-4 mb-4">
-                     <div className="glass p-3 rounded-lg">
-                       <div className="text-sm text-muted-foreground">Total Logs</div>
-                       <div className="text-2xl font-bold">{selectedLocationDetails.count}</div>
-                     </div>
-                     
-                     <div className="glass p-3 rounded-lg">
-                       <div className="text-sm text-muted-foreground">Last Activity</div>
-                       <div className="text-xl font-medium">
-                         {selectedLocationDetails.lastActivity ? 
-                           selectedLocationDetails.lastActivity.toLocaleDateString() : 
-                           'Unknown'}
-                       </div>
-                     </div>
-                   </div>
-                   
-                   <div className="mb-4">
-                     <h4 className="text-sm font-medium mb-2">Activity Timeline</h4>
-                     {selectedLocationDetails.firstActivity && selectedLocationDetails.lastActivity ? (
-                       <div className="relative h-4 bg-secondary rounded-full overflow-hidden">
-                         <div 
-                           className="absolute left-0 top-0 h-full bg-primary rounded-full"
-                           style={{ 
-                             width: `${Math.min(100, selectedLocationDetails.count * 5)}%` 
-                           }}
-                         ></div>
-                         <div className="absolute -top-6 left-0 text-xs">
-                           {selectedLocationDetails.firstActivity.toLocaleDateString()}
-                         </div>
-                         <div className="absolute -top-6 right-0 text-xs">
-                           {selectedLocationDetails.lastActivity.toLocaleDateString()}
-                         </div>
-                       </div>
-                     ) : (
-                       <div className="text-sm text-muted-foreground">
-                         Timeline data not available
-                       </div>
-                     )}
-                   </div>
-                   
-                   <div className="mb-4">
-                     <h4 className="text-sm font-medium mb-2">Coordinates</h4>
-                     {selectedLocationDetails.coordinates ? (
-                       <div className="flex items-center space-x-2">
-                         <div className="glass px-2 py-1 rounded text-xs">
-                           Lat: {selectedLocationDetails.coordinates[1].toFixed(4)}
-                         </div>
-                         <div className="glass px-2 py-1 rounded text-xs">
-                           Lng: {selectedLocationDetails.coordinates[0].toFixed(4)}
-                         </div>
-                         <button 
-                           className="text-xs text-primary hover:underline ml-auto"
-                           onClick={() => {
-                             // Copy coordinates to clipboard
-                             navigator.clipboard.writeText(
-                               `${selectedLocationDetails.coordinates[1]}, ${selectedLocationDetails.coordinates[0]}`
-                             );
-                             // You'd add a toast notification here
-                           }}
-                         >
-                           Copy
-                         </button>
-                       </div>
-                     ) : (
-                       <div className="text-sm text-muted-foreground">
-                         Coordinates not available
-                       </div>
-                     )}
-                   </div>
-                   
-                   {selectedLocationDetails.logIds && selectedLocationDetails.logIds.length > 0 && (
-                     <div>
-                       <h4 className="text-sm font-medium mb-2">Recent Logs</h4>
-                       <div className="max-h-40 overflow-y-auto border border-border rounded-lg divide-y divide-border">
-                         {selectedLocationDetails.logIds.slice(0, 5).map((logId, idx) => (
-                           <button
-                             key={idx}
-                             onClick={() => onLogSelect && onLogSelect(logId)}
-                             className="w-full text-left p-2 hover:bg-secondary/50 transition-colors text-sm flex items-center justify-between"
-                           >
-                             <span className="truncate">Log #{idx + 1}</span>
-                             <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                           </button>
-                         ))}
-                       </div>
-                       
-                       {selectedLocationDetails.logIds.length > 5 && (
-                         <div className="mt-2 text-center">
-                           <button 
-                             className="text-xs text-primary hover:underline"
-                             onClick={() => {
-                               // Show all logs for this location
-                               // Implementation would depend on your UI
-                             }}
-                           >
-                             Show all {selectedLocationDetails.logIds.length} logs
-                           </button>
-                         </div>
-                       )}
-                     </div>
-                   )}
-                 </div>
-                 
-                 <div className="p-4 border-t border-border flex justify-end">
-                   <Button 
-                     variant="outline" 
-                     size="sm"
-                     onClick={() => setShowLocationDetails(false)}
-                     className="mr-2"
-                   >
-                     Close
-                   </Button>
-                   <Button 
-                     size="sm"
-                     onClick={() => {
-                       setShowLocationDetails(false);
-                       // Center map on this location
-                       if (selectedLocationDetails.coordinates && mapRef.current) {
-                         mapRef.current.flyTo({
-                           center: selectedLocationDetails.coordinates,
-                           zoom: 15,
-                           duration: 1000
-                         });
-                       }
-                     }}
-                   >
-                     Center on Map
-                   </Button>
-                 </div>
-               </motion.div>
-             </motion.div>
-           )}
-         </AnimatePresence>
-         
-         {/* Map attribution footer */}
-         <div className="absolute bottom-2 right-2 text-xs text-muted-foreground glass-darker px-2 py-1 rounded">
-           © Mapbox © OpenStreetMap
-         </div>
-       </motion.div>
-     </div>
-   </TransitionLayout>
- );
+          {/* CSS for markers */}
+          <style jsx>{`
+            :global(.marker-cluster) {
+              background-image: url('data:image/svg+xml;charset=UTF-8,<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="40" fill="%233b82f6" stroke="white" stroke-width="3"/></svg>');
+              background-size: 100%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              cursor: pointer;
+            }
+            
+            :global(.selected-marker) {
+              background-image: url('data:image/svg+xml;charset=UTF-8,<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="40" fill="%23ef4444" stroke="white" stroke-width="3"/></svg>');
+            }
+            
+            :global(.marker-count) {
+              color: white;
+              font-weight: bold;
+              font-size: 0.75rem;
+            }
+            
+            :global(.marker-count.selected) {
+              color: #ef4444;
+            }
+            
+            :global(.location-popup) {
+              max-height: 200px;
+              overflow-y: auto;
+            }
+            
+            :global(.log-list) {
+              max-height: 150px;
+              overflow-y: auto;
+            }
+          `}</style>
+        </>
+      )}
+    </div>
+  );
 };
 
 export default LogMap;
