@@ -4,12 +4,12 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 interface LogHeaderProps {
-  activeView: 'dashboard' | 'map' | 'list' | 'timeline' | 'network';
-  setActiveView: (view: 'dashboard' | 'map' | 'list' | 'timeline' | 'network') => void;
-  setSearchOpen: (open: boolean) => void;
+  stats: any;
+  isLoading: boolean;
+  onRefresh: () => Promise<void>;
 }
 
-const LogHeader: React.FC<LogHeaderProps> = ({ activeView, setActiveView, setSearchOpen }) => {
+const LogHeader: React.FC<LogHeaderProps> = ({ stats, isLoading, onRefresh }) => {
   const isMobile = useIsMobile();
   
   const navigationItems = [
@@ -75,7 +75,7 @@ const LogHeader: React.FC<LogHeaderProps> = ({ activeView, setActiveView, setSea
         
         <div className="flex items-center">
           <button
-            onClick={() => setSearchOpen(true)}
+            onClick={() => onRefresh()}
             className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
           >
             <Search className="w-5 h-5" />

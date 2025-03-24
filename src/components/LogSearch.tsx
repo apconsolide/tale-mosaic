@@ -1,21 +1,16 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, Calendar, MapPin, Tag, Users } from 'lucide-react';
 import { LogEntry } from '@/lib/types';
 
 interface LogSearchProps {
-  isOpen: boolean;
-  onClose: () => void;
   logs: LogEntry[];
-  onSelectLog: (log: LogEntry) => void;
+  onSearchResults: (results: LogEntry[]) => void;
 }
 
 const LogSearch: React.FC<LogSearchProps> = ({
-  isOpen,
-  onClose,
   logs,
-  onSelectLog,
+  onSearchResults,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [results, setResults] = useState<LogEntry[]>([]);
@@ -49,6 +44,7 @@ const LogSearch: React.FC<LogSearchProps> = ({
   useEffect(() => {
     if (searchTerm.trim() === '') {
       setResults([]);
+      onSearchResults(logs); // Return all logs when search is empty
       return;
     }
 
@@ -65,7 +61,8 @@ const LogSearch: React.FC<LogSearchProps> = ({
     );
 
     setResults(filtered);
-  }, [searchTerm, logs]);
+    onSearchResults(filtered);
+  }, [searchTerm, logs, onSearchResults]);
 
   return (
     <AnimatePresence>
