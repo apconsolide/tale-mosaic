@@ -19,11 +19,11 @@ import {
 
 interface LogCardProps {
   log: LogEntry;
-  index: number;
+  index?: number; // Make index optional
   onClick?: () => void;
 }
 
-const LogCard: React.FC<LogCardProps> = ({ log, index, onClick }) => {
+const LogCard: React.FC<LogCardProps> = ({ log, index = 0, onClick }) => {
   // Status color mapping
   const statusColors: Record<string, string> = {
     completed: 'bg-green-100 text-green-800 border-green-200',

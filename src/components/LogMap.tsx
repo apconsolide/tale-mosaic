@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import mapboxgl from 'mapbox-gl';
 import { Button } from "@/components/ui/button";
@@ -21,7 +20,7 @@ interface LogMapProps {
 }
 
 // Default position if no logs available
-const DEFAULT_POSITION = [-97.1722, 25.9969]; // SpaceX Starbase area
+const DEFAULT_POSITION: [number, number] = [-97.1722, 25.9969]; // SpaceX Starbase area - explicitly typed as tuple
 const DEFAULT_ZOOM = 13;
 
 const LogMap = ({ logs, onSelectLog, selectedLogId }: LogMapProps) => {
@@ -468,8 +467,8 @@ const LogMap = ({ logs, onSelectLog, selectedLogId }: LogMapProps) => {
           </div>
           
           {/* CSS for markers */}
-          <style jsx>{`
-            :global(.marker-cluster) {
+          <style>{`
+            .marker-cluster {
               background-image: url('data:image/svg+xml;charset=UTF-8,<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="40" fill="%233b82f6" stroke="white" stroke-width="3"/></svg>');
               background-size: 100%;
               display: flex;
@@ -478,26 +477,26 @@ const LogMap = ({ logs, onSelectLog, selectedLogId }: LogMapProps) => {
               cursor: pointer;
             }
             
-            :global(.selected-marker) {
+            .selected-marker {
               background-image: url('data:image/svg+xml;charset=UTF-8,<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="40" fill="%23ef4444" stroke="white" stroke-width="3"/></svg>');
             }
             
-            :global(.marker-count) {
+            .marker-count {
               color: white;
               font-weight: bold;
               font-size: 0.75rem;
             }
             
-            :global(.marker-count.selected) {
+            .marker-count.selected {
               color: #ef4444;
             }
             
-            :global(.location-popup) {
+            .location-popup {
               max-height: 200px;
               overflow-y: auto;
             }
             
-            :global(.log-list) {
+            .log-list {
               max-height: 150px;
               overflow-y: auto;
             }

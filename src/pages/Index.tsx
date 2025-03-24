@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,7 +30,6 @@ const Index = () => {
   const [stats, setStats] = useState<any>(null);
   const [databaseReady, setDatabaseReady] = useState<boolean | null>(null);
 
-  // Load logs from the database
   const loadLogs = async () => {
     setIsLoading(true);
     try {
@@ -39,11 +37,9 @@ const Index = () => {
       setLogs(logsData);
       setFilteredLogs(logsData);
       
-      // Load statistics
       const statsData = await fetchLogStats();
       setStats(statsData);
       
-      // If we have logs, the database must be ready
       if (logsData.length > 0) {
         setDatabaseReady(true);
       }
@@ -55,43 +51,38 @@ const Index = () => {
     }
   };
 
-  // Load logs on component mount
   useEffect(() => {
     loadLogs();
   }, []);
 
-  // Handle log search and filtering
   const handleSearch = (searchResults: LogEntry[]) => {
     setFilteredLogs(searchResults);
   };
 
-  // Handle log selection
   const handleLogSelect = (log: LogEntry) => {
     setSelectedLog(log);
   };
 
-  // Handle generated logs from transcription
   const handleLogsGenerated = (newLogs: LogEntry[]) => {
-    // Update state with the new logs (without saving to database yet)
     setLogs((prevLogs) => [...newLogs, ...prevLogs]);
     setFilteredLogs((prevFiltered) => [...newLogs, ...prevFiltered]);
     
-    // Update stats
     loadLogs();
     
-    // Switch to map view to show the new logs
     setActiveTab('map');
   };
 
-  // Handle transcription selection from history
   const handleSelectTranscription = (text: string) => {
-    // Switch to transcription input tab
     setActiveSection('input');
   };
 
   return (
     <div className="container mx-auto p-4 md:p-6">
-      <LogHeader stats={stats} isLoading={isLoading} onRefresh={loadLogs} />
+      <LogHeader 
+        statsData={stats}
+        isLoading={isLoading}
+        onRefresh={loadLogs}
+      />
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <div className="lg:col-span-2">
@@ -109,7 +100,10 @@ const Index = () => {
             
             <TabsContent value="data" className="space-y-4">
               <div className="flex flex-col lg:flex-row gap-4 mb-4">
-                <LogSearch logs={logs} onSearchResults={handleSearch} />
+                <LogSearch
+                  allLogs={logs}
+                  onSearchResults={handleSearch}
+                />
                 
                 <div className="flex gap-2 mt-2 lg:mt-0">
                   <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -197,7 +191,9 @@ const Index = () => {
           />
           
           {selectedLog ? (
-            <LogCard log={selectedLog} />
+            <LogCard 
+              log={selectedLog}
+            />
           ) : (
             <Card className="glass">
               <CardHeader>
