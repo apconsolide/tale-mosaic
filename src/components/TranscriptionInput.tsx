@@ -3,6 +3,14 @@ import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { CardContent, Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter 
+} from "@/components/ui/dialog";
 import { Clock, FileText, Loader2, Sparkles, Save, AlertCircle } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,8 +24,11 @@ interface TranscriptionInputProps {
 
 const TranscriptionInput: React.FC<TranscriptionInputProps> = ({ onLogsGenerated }) => {
   const [transcription, setTranscription] = useState('');
+  const [transcriptionTitle, setTranscriptionTitle] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [processedLogs, setProcessedLogs] = useState<LogEntry[]>([]);
   const { toast } = useToast();
 
   const processTranscription = async () => {
@@ -63,6 +74,8 @@ const TranscriptionInput: React.FC<TranscriptionInputProps> = ({ onLogsGenerated
         status: log.status || "completed",
         referenceId: log.referenceId || `REF-${Math.floor(Math.random() * 10000)}`,
       })) as LogEntry[];
+      
+      setProcessedLogs(processedLogs);
 
       // Save logs to Supabase
       await saveLogsToSupabase(processedLogs);
@@ -74,8 +87,8 @@ const TranscriptionInput: React.FC<TranscriptionInputProps> = ({ onLogsGenerated
         description: `Generated ${processedLogs.length} log entries using Gemini AI`,
       });
       
-      // Clear the transcription field after successful processing
-      setTranscription('');
+      // Open the save dialog automatically
+      setSaveDialogOpen(true);
     } catch (error) {
       console.error("Error processing transcription:", error);
       
@@ -160,6 +173,68 @@ const TranscriptionInput: React.FC<TranscriptionInputProps> = ({ onLogsGenerated
     }
   };
 
+  const saveTranscription = async () => {
+    try {
+      setIsSaving(true);
+      
+      // Check if transcriptions table exists
+      const { error: tableCheckError } = await supabase
+        .from('transcriptions')
+        .select('id')
+        .limit(1);
+      
+      if (tableCheckError && tableCheckError.message.includes('does not exist')) {
+        toast({
+          title: "Creating Transcriptions Table",
+          description: "Setting up the transcriptions table for the first time...",
+        });
+        
+        // We don't create the table here but inform the user to run SQL
+        toast({
+          title: "Database Setup Required",
+          description: "Please run the SQL setup commands to create the transcriptions table.",
+          variant: "destructive",
+          duration: 10000,
+        });
+        return;
+      }
+      
+      // Save the transcription
+      const { error } = await supabase
+        .from('transcriptions')
+        .insert({
+          id: uuidv4(),
+          text: transcription,
+          title: transcriptionTitle || `Transcription ${new Date().toLocaleString()}`,
+          logs_generated: processedLogs.length
+        });
+      
+      if (error) {
+        throw error;
+      }
+      
+      toast({
+        title: "Transcription Saved",
+        description: "Your transcription has been saved for future reference.",
+      });
+      
+      // Clear the fields and close dialog
+      setSaveDialogOpen(false);
+      setTranscriptionTitle('');
+      setTranscription('');
+      
+    } catch (error) {
+      console.error("Error saving transcription:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save transcription.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <>
       <GeminiApiKeySetup />
@@ -180,6 +255,15 @@ const TranscriptionInput: React.FC<TranscriptionInputProps> = ({ onLogsGenerated
           
           <div className="flex justify-end space-x-2">
             <Button 
+              onClick={() => setSaveDialogOpen(true)} 
+              variant="outline"
+              disabled={!transcription.trim()}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              Save Transcription
+            </Button>
+            
+            <Button 
               onClick={processTranscription} 
               disabled={isProcessing || isSaving || !transcription.trim()}
               className="relative group"
@@ -192,7 +276,7 @@ const TranscriptionInput: React.FC<TranscriptionInputProps> = ({ onLogsGenerated
               ) : (
                 <>
                   <Sparkles className="mr-2 h-4 w-4 group-hover:text-yellow-300 transition-colors" />
-                  Generate & Save Logs
+                  Generate Logs
                 </>
               )}
               <span className="absolute -top-1 -right-1 flex h-3 w-3 group-hover:opacity-100 opacity-0 transition-opacity">
@@ -203,6 +287,55 @@ const TranscriptionInput: React.FC<TranscriptionInputProps> = ({ onLogsGenerated
           </div>
         </CardContent>
       </Card>
+      
+      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save Transcription</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="title" className="text-sm font-medium">
+                Transcription Title
+              </label>
+              <Input
+                id="title"
+                placeholder="Enter a title for this transcription"
+                value={transcriptionTitle}
+                onChange={(e) => setTranscriptionTitle(e.target.value)}
+              />
+            </div>
+            
+            {processedLogs.length > 0 && (
+              <div className="p-3 bg-secondary/20 rounded">
+                <p className="text-sm">
+                  <span className="font-medium">{processedLogs.length}</span> logs were generated from this transcription
+                </p>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={saveTranscription} 
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Transcription'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

@@ -17,6 +17,7 @@ import LogTimeline from '@/components/LogTimeline';
 import LogSearch from '@/components/LogSearch';
 import TransitionLayout from '@/components/TransitionLayout';
 import TranscriptionInput from '@/components/TranscriptionInput';
+import TranscriptionHistory from '@/components/TranscriptionHistory';
 import NetworkVisualization from '@/components/NetworkVisualization';
 import DatabaseSetupGuide from '@/components/DatabaseSetupGuide';
 import { fetchLogs } from '@/services/logService';
@@ -215,6 +216,8 @@ const Index = () => {
         {databaseReady === false && <DatabaseSetupGuide />}
         
         <TranscriptionInput onLogsGenerated={handleLogsGenerated} />
+        
+        <TranscriptionHistory />
         
         <AnimatePresence mode="wait">
           {activeView === 'dashboard' && (

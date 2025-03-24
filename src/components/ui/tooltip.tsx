@@ -1,34 +1,33 @@
 
-// This is a wrapper around the original tooltip component to add a content prop for compatibility
 import React from "react";
 import {
-  Tooltip as OriginalTooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-  TooltipProps as OriginalTooltipProps
+  Tooltip as ShadcnTooltip,
+  TooltipContent as ShadcnTooltipContent,
+  TooltipProvider as ShadcnTooltipProvider,
+  TooltipTrigger as ShadcnTooltipTrigger
 } from "@/components/ui/tooltip";
 
-export interface ExtendedTooltipProps extends OriginalTooltipProps {
+interface TooltipProps {
   content?: React.ReactNode;
   children?: React.ReactNode;
+  delayDuration?: number;
 }
 
 // Create a compatibility wrapper
-export function Tooltip({ content, children, ...props }: ExtendedTooltipProps) {
+export function Tooltip({ content, children, ...props }: TooltipProps) {
   return (
-    <TooltipProvider>
-      <OriginalTooltip {...props}>
-        <TooltipTrigger asChild>{children}</TooltipTrigger>
-        <TooltipContent>{content}</TooltipContent>
-      </OriginalTooltip>
-    </TooltipProvider>
+    <ShadcnTooltipProvider>
+      <ShadcnTooltip {...props}>
+        <ShadcnTooltipTrigger asChild>{children}</ShadcnTooltipTrigger>
+        <ShadcnTooltipContent>{content}</ShadcnTooltipContent>
+      </ShadcnTooltip>
+    </ShadcnTooltipProvider>
   );
 }
 
 // Re-export the original components
 export {
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
+  ShadcnTooltipContent as TooltipContent,
+  ShadcnTooltipProvider as TooltipProvider,
+  ShadcnTooltipTrigger as TooltipTrigger
 };
