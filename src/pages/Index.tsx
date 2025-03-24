@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -79,7 +80,7 @@ const Index = () => {
   return (
     <div className="container mx-auto p-4 md:p-6">
       <LogHeader 
-        statsData={stats}
+        stats={stats}
         isLoading={isLoading}
         onRefresh={loadLogs}
       />
@@ -101,7 +102,7 @@ const Index = () => {
             <TabsContent value="data" className="space-y-4">
               <div className="flex flex-col lg:flex-row gap-4 mb-4">
                 <LogSearch
-                  allLogs={logs}
+                  logs={logs}
                   onSearchResults={handleSearch}
                 />
                 
@@ -144,7 +145,6 @@ const Index = () => {
                       <LogTable 
                         logs={filteredLogs} 
                         onSelectLog={handleLogSelect} 
-                        selectedLogId={selectedLog?.id}
                       />
                     </TabsContent>
                     
@@ -158,7 +158,6 @@ const Index = () => {
                     <TabsContent value="network" className="h-full">
                       <NetworkVisualization
                         logs={filteredLogs}
-                        onSelectLog={handleLogSelect}
                       />
                     </TabsContent>
                   </div>

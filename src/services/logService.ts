@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { LogEntry, Transcription } from "@/lib/types";
 import { v4 as uuidv4 } from 'uuid';
@@ -225,11 +226,11 @@ export const fetchTranscriptions = async (): Promise<Transcription[]> => {
     // Transform the data to match the Transcription interface
     return data.map(item => ({
       id: item.id,
-      text: item.text || '', // Provide a default for text if not in the view
-      title: item.title,
+      text: '', // Provide a default empty string since text is not in the view
+      title: item.title || '',
       created_at: item.created_at,
       logs_generated: item.log_count || 0, // Map log_count to logs_generated
-      user_id: item.user_id
+      user_id: undefined // This field might not be present in the view
     }));
   } catch (error) {
     console.error("Error fetching transcriptions:", error);
